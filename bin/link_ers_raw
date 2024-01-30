@@ -1,0 +1,23 @@
+#!/bin/bash
+#create SLC directory and set-up dir structure [YYYYMMDD]
+
+# Bekaert David - November 2010
+
+# Initial coding in tsh by Andy Hooper
+# DB 10/2010	Changing the coding and input arguments
+# DB 11/2010    Supressing outputs
+# DB 11/2010    Making compatible with link_raw script
+
+indir=$1
+
+mkdir SLC
+cd SLC
+for dir in `\ls -d $indir/[0-9]*`
+do
+ 	date=`basename $dir`
+	mkdir $date
+ 	ln -s $dir/DAT_01.001 $date/IMAGERY$date
+ 	ln -s $dir/VDF_DAT.001 $date/VDF$date
+ 	ln -s $dir/LEA_01.001 $date/SARLEADER$date
+done
+cd ..

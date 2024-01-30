@@ -1,0 +1,32 @@
+#!/bin/bash
+##
+## Mahmut Arikan - 20091021 
+##
+## TUDelft - 2009
+
+ 
+
+# Functions 
+goodfunc(){
+
+#for f in `find . -name master.res`; do
+filelist="`find . -maxdepth 1 -name master.res` `find . -name slave.res`"
+for f in $filelist; do
+   # grep -H "^precise_orbits:" ${f}
+   n=`grep NUMBER_OF_DATAPOINTS ${f}`
+   p=`grep -H "^precise_orbits:" ${f}`
+   echo -e "$p $n"
+done 
+}
+
+
+case $# in
+         0) goodfunc 
+	    ;;
+         *) echo -e "Usage: ${0##*/} (run within INSAR processing directory) \n"
+	    ;;
+esac
+
+
+
+#EOF

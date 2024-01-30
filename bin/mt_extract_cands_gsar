@@ -1,0 +1,153 @@
+#!/bin/csh -f
+
+# Cycle through patches in patch.list and extract data for
+# candidiate pixels 
+# To just give a list as input and run rest by default do:
+# 
+# Andy Hooper, Jan 2007
+# ===========================================================================
+# 06/2011 AH: Option to select processing
+# 12/2012 AH: Short and byteswap options
+# 12/2012 DB: Allow for a list to be given as input
+# 02/2013 AH: Short and byteswap options for small baselines
+# ===========================================================================
+# 
+# mt_extract_cands docands dophase dolonlat dodem dolook doinc byteswap mask_file patch_list
+#    Arguments are optional:
+#    doxxx: f,d,s (do) or 0 (don't do)
+#           ("s" for short, "d" for double or "f" for float)
+#           default for each argument is 0 unless no arguments are input 
+#           when default becomes f f d d d d d
+#    byteswap: 1 for yes or 0 for no (default)
+#    mask_file: by default none specified ""
+#    patch_list: By default this is patch.list
+#
+#    To run by default and specifying all arguments do:
+#    mt_extract_cands_gsar f f d d d d d 0 "" patch_list
+#
+### Initial welcome
+set PRG = `basename "$0"`
+set AUT = "Andy Hooper, Sep 2015"
+echo "$PRG $AUT"
+echo " "
+
+if ($#argv > 1) then
+    set dophase = $argv[2]
+else 
+    set dophase = 0
+endif
+
+if ($#argv > 2) then
+    set dolon = $argv[3]
+else 
+    set dolon = 0
+endif
+
+if ($#argv > 3) then
+    set dolat = $argv[4]
+else 
+    set dolat = 0
+endif
+
+if ($#argv > 4) then
+    set dodem = $argv[5]
+else 
+    set dodem = 0
+endif
+
+if ($#argv > 5) then
+    set doinc = $argv[6]
+else 
+    set doinc = 0
+endif
+
+if ($#argv > 6) then
+    set dosquint = $argv[7]
+else 
+    set dosquint = 0
+endif
+
+if ($#argv > 7) then
+    set byteswap = $argv[8]
+else 
+    set byteswap = 0
+endif
+
+if ($#argv > 8) then
+    set maskfile = $argv[9]
+else 
+    set maskfile = ""
+endif
+
+if ($#argv > 9) then 
+        set list = $argv[10]
+        echo List given as input
+        echo $list
+else
+        set list = patch.list
+endif
+
+
+if ($#argv > 0) then
+    set docands = $argv[1]
+else 
+    set docands = f
+    set dophase = f
+    set dolon = d
+    set dolat = d
+    set dodem = d
+    set doinc = d
+    set dosquint = d
+endif
+
+set WORKDIR = $cwd
+set dirname = `echo $WORKDIR | gawk 'BEGIN {FS = "/"}{print $(NF)}'`
+
+foreach patch(`cat $list`)
+
+    cd $patch
+    echo "Patch:" $patch
+
+    if ($docands != 0) then
+        if ( -e $WORKDIR/selsbc.in) then # Select SB candidates 
+            selsbc_patch $WORKDIR/selsbc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $docands $byteswap $WORKDIR/$maskfile
+        else # Select PS candidates 
+            echo selpsc_patch $WORKDIR/selpsc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $docands $byteswap $WORKDIR/$maskfile masteramp.in
+            selpsc_patch $WORKDIR/selpsc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $docands $byteswap $WORKDIR/$maskfile $WORKDIR/masteramp.in
+        endif
+    endif
+
+    if ($dolon != 0) then
+        # Retrieve lon for PS candidates
+        pscdem $WORKDIR/psclon.in pscands.1.ij pscands.1.lon $dolon
+    endif
+
+    if ($dolat != 0) then
+        # Retrieve lat for PS candidates
+        pscdem $WORKDIR/psclat.in pscands.1.ij pscands.1.lat $dolat
+    endif
+
+    if ($dodem != 0) then
+        # Retrieve hgt for PS candidates
+        pscdem $WORKDIR/pscdem.in pscands.1.ij pscands.1.hgt $dodem
+    endif
+
+    if ($doinc != 0) then
+        # Retrieve incidence angle for PS candidates
+        pscdem $WORKDIR/pscinc.in pscands.1.ij pscands.1.inc $doinc
+    endif
+
+    if ($dosquint != 0) then
+        # Retrieve squint angle for PS candidates
+        pscdem $WORKDIR/pscsquint.in pscands.1.ij pscands.1.squint $dosquint
+    endif
+
+    if ($dophase != 0) then
+        # Retrieve phase for PS candidates
+        pscphase $WORKDIR/pscphase.in pscands.1.ij pscands.1.ph
+    endif
+
+    cd $WORKDIR
+end
+
+

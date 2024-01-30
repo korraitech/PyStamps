@@ -1,0 +1,77 @@
+#!/bin/tcsh -f
+# Extract baseline information and calculate expected rho
+# 
+# K.H. Spaans, September 2010
+# ===========================================================================
+# MA  Small fix for master doppler
+# ===========================================================================
+#
+# Use:
+# master_select [Tcrit] [Bcrit] [Dcrit]
+# where Tcrit is the critical temporal baseline
+#       Bcrit is the critical perpendicular baseline
+#       Dcrit is the critical Doppler baseline
+
+if ($#argv == 0) then
+   set Tcrit = 1800
+   set Bcrit = 1100
+   set Dcrit = 1380
+   echo " "
+   echo "Using default values for critical baseline:"
+endif
+
+if ($#argv > 0) then
+  set Tcrit = $argv[1]
+else
+  set Tcrit = 1800
+endif
+
+if ($#argv > 1) then
+   set Bcrit = $argv[2]
+else
+   set Bcrit = 1100
+endif
+
+if ($#argv > 2) then
+   set Dcrit = $argv[3]
+else
+   set Dcrit = 1380
+endif
+
+echo " "
+echo "   Tcrit:	"$Tcrit" days"
+echo "   Bcrit:	"$Bcrit" meter"
+echo "   Dcrit:	"$Dcrit" Hertz"
+echo " "
+
+set masterdate = `pwd | gawk 'n=split($1,master,"_") {print master[n]}'`
+set masterdopp = `grep f_DC_con master.res | gawk '{print $5}'`
+
+##mv coreg/slave.res coreg/slaveBU.res 2>& /dev/null #Preventing slave.res in INSAR_masterdate to get into doppler baselines
+#mv coreg/slave.res coreg/slaveBU.res  > & /dev/null # MA
+#mv coreg/coreg.out coreg/coregBU.out  > & /dev/null
+
+grep Bperp [0-9]*/coreg.out | gawk 'split($1,date,"/") {print date[1]}' > Date.temp
+grep Bperp [0-9]*/coreg.out | gawk '{print $4}' > Bperp.temp
+grep f_DC_con [0-9]*/slave.res | gawk '{print $5}' > Dopp.temp
+
+#mv coreg/slaveBU.res coreg/slave.res > & /dev/null #Preventing slave.res in INSAR_masterdate to get into doppler baselines
+#mv coreg/coregBU.out coreg/coreg.out > & /dev/null
+
+sed '$a '$masterdate'' Date.temp > Date.txt
+rm -f Date.temp
+sed '$a '0'' Bperp.temp > Bperp.txt
+rm -f Bperp.temp
+#sed '$a '0'' Dopp.temp > Dopp.txt # values are not relative
+sed '$a '$masterdopp'' Dopp.temp > Dopp.txt
+rm -f Dopp.temp
+
+echo "masterchoice $Tcrit $Bcrit $Dcrit" >matbgparms.txt
+matlab -nojvm -nosplash -nodisplay < $STAMPS/matlab/batchjob.m > masterchoice.log
+
+cat rho.txt
+
+
+
+
+

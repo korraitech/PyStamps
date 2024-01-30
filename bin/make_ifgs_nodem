@@ -1,0 +1,18 @@
+#!/bin/tcsh -f
+# 
+# Can be run in place of make_ifgs when a DEM need not be subtracted
+#
+# Andy Hooper, Feb 2010
+
+set WORKDIR = $cwd
+
+if (! -e make_ifgs.list) then
+    \ls -d $WORKDIR/[1,2]*/coreg.out | gawk 'BEGIN {FS="coreg.out"} {print $1}'  > make_ifgs.list
+endif
+
+foreach dir(`cat make_ifgs.list`)
+   cd $dir
+   step_ifg_nodem
+end
+
+cd $WORKDIR

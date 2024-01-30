@@ -1,0 +1,141 @@
+#!/bin/csh -f
+
+# Cycle through patches in patch.list and extract data for
+# candidiate pixels 
+# To just give a list as input and run rest by default do:
+# 
+# Andy Hooper, Jan 2007
+# ===========================================================================
+# 06/2011 AH: Option to select processing
+# 12/2012 AH: Short and byteswap options
+# 12/2012 DB: Allow for a list to be given as input
+# 02/2013 AH: Short and byteswap options for small baselines
+# 08/2017 AH: Leave maskfile from selpsc/sbc if not present 
+# ===========================================================================
+# 
+# mt_extract_cands dophase dolonlat dodem docands precision byteswap mask_file patch_list
+#    Arguments are optional: 1 (do) or 0 (don't do)
+#    Default for each argument is 0 unless no arguments are input 
+#    when default for becomes 1
+#    precision: "s" for short or "f" for float (default)
+#    byteswap: 1 for yes or 0 for no (default)
+#    mask_file: by default none specified ""
+#    patch_list: By default this is patch.list
+#
+#    To run by default and specifying all arguments do:
+#    mt_extract_cands 1 1 1 1 "f" 0 "" patch_list
+#
+### Initial welcome
+set PRG = `basename "$0"`
+set AUT = "Andy Hooper, Jan 2007"
+echo "$PRG $AUT"
+echo " "
+
+if ($#argv > 1) then
+    set dolonlat = $argv[2]
+else 
+    set dolonlat = 0
+endif
+
+if ($#argv > 2) then
+    set dodem = $argv[3]
+else 
+    set dodem = 0
+endif
+
+if ($#argv > 3) then
+    set docands = $argv[4]
+else 
+    set docands = 0
+endif
+
+if ($#argv > 4) then
+    set prec = $argv[5]
+else 
+    set prec = "f"
+endif
+
+if ($#argv > 5) then
+    set byteswap = $argv[6]
+else 
+    set byteswap = 0
+endif
+
+if ($#argv > 6) then
+    set maskfile = $argv[7]
+else 
+    set maskfile = ""
+endif
+
+if ($#argv == 8) then # DB
+        set list = $argv[8]
+        echo List given as input
+        echo $list
+else
+        set list = patch.list
+endif
+
+
+if ($#argv > 0) then
+    set dophase = $argv[1]
+else 
+    set dophase = 1
+    set dolonlat = 1
+    set dodem = 1
+    set docands = 1
+endif
+
+set WORKDIR = $cwd
+set dirname = `echo $WORKDIR | gawk 'BEGIN {FS = "/"}{print $(NF)}'`
+
+foreach patch(`cat $list`)
+
+    cd $patch
+    echo ""
+    echo "Patch:" $patch
+
+    if ($docands == 1) then
+        if ( -e $WORKDIR/selsbc.in) then # Select SB candidates 
+          if ( $maskfile != "" ) then 
+            echo "selsbc_patch $WORKDIR/selsbc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap $WORKDIR/$maskfile"
+            selsbc_patch $WORKDIR/selsbc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap $WORKDIR/$maskfile
+          else
+            echo "selsbc_patch $WORKDIR/selsbc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap"
+            selsbc_patch $WORKDIR/selsbc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap 
+          endif
+        else # Select PS candidates 
+          if ( $maskfile != "" ) then 
+            echo "selpsc_patch $WORKDIR/selpsc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap $WORKDIR/$maskfile"
+            selpsc_patch $WORKDIR/selpsc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap $WORKDIR/$maskfile
+          else
+            echo "selpsc_patch $WORKDIR/selpsc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap "
+            selpsc_patch $WORKDIR/selpsc.in patch.in pscands.1.ij pscands.1.da mean_amp.flt $prec $byteswap 
+          endif
+        endif
+    endif
+
+    if ($dolonlat == 1) then
+        # Retrieve lon/lat for PS candidates
+        echo ""
+        echo "psclonlat $WORKDIR/psclonlat.in pscands.1.ij pscands.1.ll"
+        psclonlat $WORKDIR/psclonlat.in pscands.1.ij pscands.1.ll
+    endif
+
+    if ($dodem == 1) then
+        # Retrieve hgt for PS candidates
+        echo ""
+        echo "pscdem $WORKDIR/pscdem.in pscands.1.ij pscands.1.hgt"
+        pscdem $WORKDIR/pscdem.in pscands.1.ij pscands.1.hgt
+    endif
+
+    if ($dophase == 1) then
+        # Retrieve phase for PS candidates
+        echo ""
+        echo "pscphase $WORKDIR/pscphase.in pscands.1.ij pscands.1.ph"
+        pscphase $WORKDIR/pscphase.in pscands.1.ij pscands.1.ph
+    endif
+
+    cd $WORKDIR
+end
+
+
