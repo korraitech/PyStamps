@@ -40,7 +40,7 @@ INSTALL_DIR =	../bin
 CC 	=	g++
 
 ### Compilation flags
-CFLAGS	=	-std=c++11
+CFLAGS	= -std=c++11 -fopenmp
 
 
 ##################################################################
@@ -49,6 +49,7 @@ CFLAGS	=	-std=c++11
 
 ### The programs we want
 PROGS	=	calamp \
+		calamppl \
 		selpsc_patch \
 		selsbc_patch \
 		cpxsum \
@@ -74,6 +75,8 @@ selpsc_patch:	selpsc_patch.o
 selsbc_patch:	selsbc_patch.o
 		$(CC) $(CFLAGS) $@.o -o $@
 calamp:		calamp.o
+		$(CC) $(CFLAGS) $@.o -o $@
+calamppl:	calamppl.o
 		$(CC) $(CFLAGS) $@.o -o $@
 cpxsum:		cpxsum.o
 		$(CC) $(CFLAGS) $@.o -o $@
@@ -108,6 +111,7 @@ definstall:	$(PROGS)
 ### Helpers ###
 clean:	
 		@rm -f *.o *dummy* *.bak
+		@rm -f calamp calamppl cpxsum psclonlat pscphase pscdem selpsc_patch selsbc_patch
 		@echo "* Removed junk."
 ### some reason under cygwin progs are not removed without ".exe"???
 CYGWIN_EXE = 	$(PROGS:=.exe)
