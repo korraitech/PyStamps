@@ -230,5 +230,3 @@ else
     echo "lon file does not exist"
     exit 3
 endif
-
-matlab -nodisplay -r "ps_load_init();exit;"

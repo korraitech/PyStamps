@@ -75,6 +75,21 @@ else
 end
 
 heading=readparm(rslcpar,'heading:');
+setparm('heading',heading,1);
+
+freq=readparm(rslcpar,'radar_frequency:');
+lambda=299792458/freq;
+setparm('lambda',lambda,1);
+
+sensor=readparm(rslcpar,'sensor:');
+if ~isempty(strfind('sensor','ASAR'))
+    platform='ENVISAT';
+else
+    platform=sensor; % S1A for Sentinel-1A
+end
+setparm('platform',platform,1);
+
+
 
 ij=load(ijname);
 n_ps=size(ij,1);

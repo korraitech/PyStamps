@@ -20,7 +20,7 @@ load ps2 bperp;
 lambda=getparm('lambda');
 ph_mm=-ph_uw*lambda*1000/(4*pi);
 save(savename,'ph_mm','lonlat', 'unwrap_ifg_index', 'ref_ps',...
-    'day', 'n_ps', 'lambda', 'ifg_list', 'master_day', 'bperp', '-v7.3') % 'ph_all', 'G', 'm'
+    'day', 'n_ps', 'lambda', 'ifg_list', 'master_day', 'bperp') % 'ph_all', 'G', 'm'
 %clear all % clean up 
 
 %EOF
