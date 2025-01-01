@@ -1,3 +1,0 @@
-#!/bin/tcsh -f
-
-rm -f ../SLC/*/*.raw

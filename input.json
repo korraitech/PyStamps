@@ -1,0 +1,12 @@
+{
+    "Pstm": {
+        "ADT": 0.4,
+        "NRP": 2,
+        "NAP": 2,
+        "RPO": 50,
+        "APO": 200
+    },
+    "Prdt": "20231107",
+    "Pinp": "/Users/rvs/myspace/workspace/services/service-utils/manual-stamps/manual_stamps_v1/data/export",
+    "Pout": "/Users/rvs/myspace/workspace/services/service-utils/manual-stamps/manual_stamps_v1/data/output"
+}

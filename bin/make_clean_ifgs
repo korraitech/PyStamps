@@ -1,5 +1,0 @@
-#!/bin/tcsh -f
-
-rm -f */cint.raw
-rm -f */cint.minrefpha.raw
-rm -f */cint.minrefdem.raw
