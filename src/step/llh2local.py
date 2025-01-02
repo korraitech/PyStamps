@@ -1,6 +1,6 @@
 import numpy as np
 
-def ps_llh_local(llh, llh0):
+def llh2local(llh, llh0):
     """
     Convert lat/lon/height coordinates to local coordinates.
     

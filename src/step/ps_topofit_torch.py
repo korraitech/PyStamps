@@ -1,7 +1,8 @@
 import torch
 from typing import Tuple
 
-def ps_topofit_torch_batch(cpxphase: torch.Tensor, 
+# This is the torch version of ps_topofit. It is faster than the numpy version, but does not have a plot function.
+def ps_topofit_torch(cpxphase: torch.Tensor, 
                           bperp: torch.Tensor, 
                           n_trial_wraps: float, 
                           plotflag: str = 'n',

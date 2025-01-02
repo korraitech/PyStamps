@@ -4,12 +4,12 @@ import time
 import os
 from scipy.interpolate import interp1d
 from .utils import load_h5
-from .ps_topofit import ps_topofit
-from .ps_topofit_torch_batch import ps_topofit_torch_batch
+from .ps_topofit_numpy import ps_topofit
+from .ps_topofit_torch import ps_topofit_torch
 from .clap_filt import clap_filt
 from .stamps_save import stamps_save
 
-def ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
+def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     """
     Estimate coherence of PS candidates.
 
@@ -218,7 +218,7 @@ def ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     N_opt = np.zeros(n_ps_int, dtype=np.float64)
 
     # ph_patch and ph_res should have shape (n_ps_int, n_ifg)
-    ph_res = np.zeros((n_ps_int, n_ifg), dtype=np.complex64)
+    ph_res = np.zeros((n_ps_int, n_ifg), dtype=np.float32)
     ph_patch = np.zeros((n_ps_int, n_ifg), dtype=np.complex64)
 
     # grid_ij in MATLAB uses y in col1, x in col2
@@ -456,7 +456,7 @@ def ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             'C_ps':C_ps,
             'coh_ps':coh_ps,
             'N_opt':N_opt, # wrong on val 472 of matlab and 471 in python
-            'ph_res':ph_res, # contains complex but single on matlab
+            'ph_res':ph_res, 
             'step_number':step_number,
             'ph_grid':ph_grid,
             'n_trial_wraps':n_trial_wraps,
@@ -507,7 +507,7 @@ def compute_coh_rand_with_pytorch(rand_ifg, bperp, n_trial_wraps):
         batch_bperp = bperp_tensor.expand(batch_end - batch_start, -1)
         
         # Process entire batch at once
-        _, _, coh_batch, _ = ps_topofit_torch_batch(
+        _, _, coh_batch, _ = ps_topofit_torch(
             batch_exp_rand_ifg,  # Shape: [batch_size, n_ifg]
             batch_bperp,         # Shape: [batch_size, n_ifg]
             n_trial_wraps,

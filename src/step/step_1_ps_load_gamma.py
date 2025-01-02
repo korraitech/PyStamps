@@ -2,11 +2,11 @@ import numpy as np
 import os
 import h5py
 from datetime import datetime
-from .ps_llh_local import ps_llh_local
+from .llh2local import llh2local
 from .utils import read_lines,get_par
 from .stamps_save import stamps_save
 
-def ps_load_gamma(workdir:str,patch:str, endian='b'):
+def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
     """
     Initial load of files into Python workspace.
     
@@ -143,7 +143,7 @@ def ps_load_gamma(workdir:str,patch:str, endian='b'):
     ll0 = (np.max(lonlat, axis=0) + np.min(lonlat, axis=0)) / 2
     
     # Convert to local coordinates
-    xy = ps_llh_local(lonlat.T, ll0).T * 1000
+    xy = llh2local(lonlat.T, ll0).T * 1000
     
     # # Sort coordinates and find corners
     # sort_x = xy[xy[:, 0].argsort()]

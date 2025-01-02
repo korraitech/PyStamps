@@ -12,6 +12,6 @@
 
 # Path where users data stored
 
-STAMPS_CPU = 16
+STAMPS_CPU = 4
 
-CONCURRENT = 4
+CONCURRENT = 1

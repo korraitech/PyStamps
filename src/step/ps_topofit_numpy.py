@@ -2,6 +2,7 @@ import numpy as np
 from typing import Tuple, Optional, Union
 import matplotlib.pyplot as plt
 
+# This is the original ps_topofit function. Slow compared to the torch version, but has plot function.
 def ps_topofit(cpxphase: np.ndarray, 
                bperp: np.ndarray, 
                n_trial_wraps: float, 
