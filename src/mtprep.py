@@ -27,7 +27,7 @@ from .prep.psclonlat import run_psclonlat
 from .prep.pscdem import run_pscdem
 from .prep.pscphase import run_pscphase
 from .prep.parminit import ps_parms_init
-from .env import CONCURRENT
+from .env import POOL_SIZE
 from multiprocessing import Pool
 
 def parse_field(path:str):
@@ -95,25 +95,28 @@ def create_patch(workdir,length,width,prg,paz,overlap_rg,overlap_az):
 def task_cands(params):
     workdir = params["workdir"]
     patchdir = os.path.join(workdir,params["patch"])
-    pscands_1_ij = os.path.join(patchdir,'pscands.1.ij')
+    pscands_ij = os.path.join(patchdir,'pscands_ij.h5')
+    pscands_da = os.path.join(patchdir,'pscands_da.h5')
+    pscands_ma = os.path.join(patchdir,'pscands_ma.h5')
     
     run_pscpatch(params["patch"],
         os.path.join(workdir,'selpsc.in'),
         os.path.join(patchdir,'patch.in'),
-        pscands_1_ij,os.path.join(patchdir,'pscands.1.da'),
-        os.path.join(patchdir,'mean_amp.flt'))
-
+        pscands_ij,
+        pscands_da,
+        pscands_ma)
+    
     run_psclonlat(params["patch"],
         os.path.join(workdir,'psclonlat.in'),
-        pscands_1_ij,os.path.join(patchdir,'pscands.1.ll'))
+        pscands_ij,os.path.join(patchdir,'pscands_ll.h5'))
     
     run_pscdem(params["patch"],
         os.path.join(workdir,'pscdem.in'),
-        pscands_1_ij,os.path.join(patchdir,'pscands.1.hgt'))
+        pscands_ij,os.path.join(patchdir,'pscands_ht.h5'))
     
     run_pscphase(params["patch"],
         os.path.join(workdir,'pscphase.in'),
-        pscands_1_ij,os.path.join(patchdir,'pscands.1.ph'))
+        pscands_ij,os.path.join(patchdir,'pscands_ph.h5'))
 
 def mt_prep(master:str,datadir:str,workdir:str,da_thresh:float=0.4,
               prg:int=2, paz:int=2, overlap_rg:int= 50,overlap_az:int =200):
@@ -150,8 +153,8 @@ def mt_prep(master:str,datadir:str,workdir:str,da_thresh:float=0.4,
     for patch in patch_list:
         task_param.append({"workdir": workdir,"patch": patch})
     
-    with Pool(processes=CONCURRENT) as pool:
-        pool.map(task_cands, task_param)    
+    with Pool(processes=POOL_SIZE) as pool:
+        pool.map(task_cands, task_param)
 
     rslc_par = {
         "heading" : float(rsc_data["heading"].replace('#','').replace('degrees','')),

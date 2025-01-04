@@ -3,10 +3,10 @@ import os
 import h5py
 from datetime import datetime
 from .llh2local import llh2local
-from .utils import read_lines,get_par
+from .utils import read_lines,get_par,read_h5
 from .stamps_save import stamps_save
 
-def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
+def step_1_ps_load_gamma(workdir:str, patch:str):
     """
     Initial load of files into Python workspace.
     
@@ -15,26 +15,22 @@ def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
         endian (str): Endianness of binary files ('b' for big-endian, 'l' for little-endian)
     """
     print("Running Step-01 ...\t[{}]".format(patch))
+    print('Initial load of files...')
     patch_dir = os.path.join(workdir,patch)
-
-    # Set endian format for numpy
-    endian_fmt = '>' if endian == 'b' else '<'
     
     # Files inside patch
-    phname = os.path.join(patch_dir, 'pscands.1.ph')
-    ijname = os.path.join(patch_dir, 'pscands.1.ij')
-    llname = os.path.join(patch_dir, 'pscands.1.ll')
-    hgtname = os.path.join(patch_dir, 'pscands.1.hgt')
-    daname = os.path.join(patch_dir, 'pscands.1.da')
+    phpath = os.path.join(patch_dir, 'pscands_ph.h5')
+    ijpath = os.path.join(patch_dir, 'pscands_ij.h5')
+    llpath = os.path.join(patch_dir, 'pscands_ll.h5')
+    htpath = os.path.join(patch_dir, 'pscands_ht.h5')
+    dapath = os.path.join(patch_dir, 'pscands_da.h5')
 
     # Files in parent directory
-    rscname = os.path.join(workdir, 'rsc.txt')
-    pscname = os.path.join(workdir, 'pscphase.in')
+    rscpath = os.path.join(workdir, 'rsc.txt')
+    pscpath = os.path.join(workdir, 'pscphase.in')
     
-    psver = 1
-    
-    rslcpar = read_lines(rscname)[0]
-    ifgs = read_lines(pscname)[1:]
+    rslcpar = read_lines(rscpath)[0]
+    ifgs = read_lines(pscpath)[1:]
     
     # Process dates
     nb = len(ifgs[0])
@@ -79,7 +75,7 @@ def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
     prf = float(param_fields["prf"][0])
     
     # Load IJ coordinates
-    ij = np.loadtxt(ijname)
+    ij = read_h5(ijpath)["data"]
     n_ps = ij.shape[0]
     
     # Calculate geometry
@@ -115,15 +111,16 @@ def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
     mean_range = rgc
     
     # Read phase data
-    ph = np.zeros((n_ps, n_ifg), dtype=np.complex64)
-    with open(phname, 'rb') as fid:
-        for i in range(n_ifg):
-            # Read all data for one interferogram at once
-            ph_bit = np.fromfile(fid, dtype=f'{endian_fmt}f', count=n_ps*2)
-            ph[:, i] = ph_bit[::2] + 1j*ph_bit[1::2]
+    ph = read_h5(phpath)["data"]
+    # ph = np.zeros((n_ps, n_ifg), dtype=np.complex64)
+    # with open(phname, 'rb') as fid:
+    #     for i in range(n_ifg):
+    #         # Read all data for one interferogram at once
+    #         ph_bit = np.fromfile(fid, dtype=f'{endian_fmt}f', count=n_ps*2)
+    #         ph[:, i] = ph_bit[::2] + 1j*ph_bit[1::2]
     
     # Process zero phases
-    zero_ph = np.sum(ph == 0, axis=1)
+    # zero_ph = np.sum(ph == 0, axis=1)
     #nonzero_ix = zero_ph <= 1
     
     if master_master_flag == '1':
@@ -134,10 +131,11 @@ def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
         n_image += 1
     
     # Read lon/lat data
-    if os.path.exists(llname):
-        lonlat = np.fromfile(llname, dtype=f'{endian_fmt}f').reshape(-1, 2).astype(np.float64)
-    else:
-        raise FileNotFoundError(f"{llname} does not exist")
+    lonlat = read_h5(llpath)["data"]
+    #  if os.path.exists(llname):
+    #       lonlat = np.fromfile(llname, dtype=f'{endian_fmt}f').reshape(-1, 2).astype(np.float64)
+    #  else:
+    #       raise FileNotFoundError(f"{llname} does not exist")
     
     # Calculate center point
     ll0 = (np.max(lonlat, axis=0) + np.min(lonlat, axis=0)) / 2
@@ -200,6 +198,7 @@ def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
     ij[:, 0] = np.arange(1, n_ps + 1)
     xy[:, 0] = np.arange(1, n_ps + 1)
 
+    psver = 1
     with h5py.File(os.path.join(patch_dir, 'psver.h5'), 'w') as f:
         f.create_dataset('psver', data=psver)
     
@@ -232,19 +231,15 @@ def step_1_ps_load_gamma(workdir:str,patch:str, endian='b'):
     stamps_save(patch_dir, lasavename, **{"la":la})
     
     # Save D_A if exists
-    if os.path.exists(daname):
-        D_A = np.loadtxt(daname)
-        D_A = D_A[sort_ix]
-        D_A = D_A[~ix_nan]
-        dasavename = f'da{psver}.h5'
-        stamps_save(patch_dir, dasavename, **{"D_A":D_A})
+    D_A = read_h5(dapath)["data"]
+    D_A = D_A[sort_ix]
+    D_A = D_A[~ix_nan]
+    dasavename = f'da{psver}.h5'
+    stamps_save(patch_dir, dasavename, **{"D_A":D_A})
     
     # Save height if exists
-    if os.path.exists(hgtname):
-        with open(hgtname, 'rb') as fid:
-            hgt = np.fromfile(fid, dtype=f'{endian_fmt}f')
-        hgt = hgt[sort_ix]
-        hgt = hgt[~ix_nan]
-        hgtsavename = f'hgt{psver}.h5'
-        stamps_save(patch_dir, hgtsavename, **{"hgt":hgt})
-
+    hgt = read_h5(htpath)["data"]
+    hgt = hgt[sort_ix]
+    hgt = hgt[~ix_nan]
+    hgtsavename = f'hgt{psver}.h5'
+    stamps_save(patch_dir, hgtsavename, **{"hgt":hgt})

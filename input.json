@@ -7,6 +7,6 @@
         "APO": 200
     },
     "Prdt": "20231107",
-    "Pinp": "/Users/rajatmann/Developer/korrai/snap-pystamps/data/stamps",
-    "Pout": "/Users/rajatmann/Developer/korrai/snap-pystamps/data/output"   
+    "Pinp": "/Users/rvs/myspace/workspace/services/service-utils/stamps-dev/snap-pystamps/data/export",
+    "Pout": "/Users/rvs/myspace/workspace/services/service-utils/stamps-dev/snap-pystamps/data/output"   
 }

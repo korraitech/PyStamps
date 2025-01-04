@@ -3,7 +3,7 @@ import torch
 import time
 import os
 from scipy.interpolate import interp1d
-from .utils import load_h5
+from .utils import read_h5
 from .ps_topofit_numpy import ps_topofit
 from .ps_topofit_torch import ps_topofit_torch
 from .clap_filt import clap_filt
@@ -25,6 +25,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         parms:dict - parameters from parms.json
     """
     print("Running Step-02 ...\t[{}]".format(patch))
+    print('Estimating gamma for candidate pixels...')
     patch_dir = os.path.join(workdir,patch)
 
     # Constants
@@ -59,7 +60,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     low_pass = np.fft.fftshift(low_pass)
 
     # Load psver
-    psver_data = load_h5(os.path.join(patch_dir, 'psver.h5'))
+    psver_data = read_h5(os.path.join(patch_dir, 'psver.h5'))
     psver = int(psver_data['psver'])
 
     # Build filenames
@@ -71,14 +72,14 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     daname = f'da{int(psver)}.h5'
 
     # Load PS data
-    ps_data = load_h5(os.path.join(patch_dir, psname))
-    bp_data = load_h5(os.path.join(patch_dir, bpname))
+    ps_data = read_h5(os.path.join(patch_dir, psname))
+    bp_data = read_h5(os.path.join(patch_dir, bpname))
 
     n_ps_int = int(ps_data['n_ps'])
     n_ifg = int(ps_data['n_ifg'])
 
     # Load baseline perpendicular matrix and version
-    bp_data = load_h5(os.path.join(patch_dir,bpname))
+    bp_data = read_h5(os.path.join(patch_dir,bpname))
 
     # Extract bperp_mat
     if 'bperp_mat' in bp_data:
@@ -97,14 +98,14 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
 
     # Load or create D_A
     if os.path.exists(os.path.join(patch_dir,daname)):
-        da_data = load_h5(os.path.join(patch_dir,daname))
+        da_data = read_h5(os.path.join(patch_dir,daname))
         D_A = da_data['D_A']
     else:
         D_A = np.ones((n_ps_int, 1), dtype=np.float64)
 
     # Load phase data
     if os.path.exists(os.path.join(patch_dir,phname)):
-        ph_data = load_h5(os.path.join(patch_dir,phname))
+        ph_data = read_h5(os.path.join(patch_dir,phname))
         ph = ph_data['ph']
     else:
         ph = ps_data['ph']
@@ -143,7 +144,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # Incidence angle
     if os.path.exists(os.path.join(patch_dir,laname)):
         print('Found look angle file')
-        la_data = load_h5(os.path.join(patch_dir,laname))
+        la_data = read_h5(os.path.join(patch_dir,laname))
         inc_mean = np.mean(la_data['la']) + 0.052  # approximate relation
     else:
         inc_mean = 21.0 * np.pi / 180.0  # fallback guess
