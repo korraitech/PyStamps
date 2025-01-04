@@ -32,7 +32,7 @@ def calculate_amplitude_calibration(file_path: str, width: int, device: torch.de
         print(f"WARNING: SLC {file_path} has ZERO mean amplitude")
         calibration_factor = 0.0
         
-    return f"{file_path} {round(calibration_factor, 4)}"
+    return f"{file_path} {calibration_factor}"
 
 def run_calamp(calamp_in: str, width: int, calamp_out: str):
     """Run the calibration process on the input files."""

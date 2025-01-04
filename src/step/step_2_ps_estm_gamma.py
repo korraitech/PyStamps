@@ -44,12 +44,11 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     gamma_change_convergence = float(parms['gamma_change_convergence'])
     gamma_max_iterations = int(parms['gamma_max_iterations'])
 
-    # Threshold based on baseline flag
+    # Threshold based on baseline flag for UrbanSAR
     low_coh_thresh = 31  # equivalent to coherence = 0.31
 
     # Frequency setup for filtering
     freq0 = 1.0 / low_pass_wavelength
-    # freq_i in MATLAB: -(n_win)/grid_size/n_win/2 : 1/grid_size/n_win : (n_win-2)/grid_size/n_win/2
     freq_i = np.arange(
         start=-(n_win) / (grid_size * n_win) / 2.0,
         stop=((n_win - 2) / (grid_size * n_win) / 2.0) + 1e-12,
@@ -73,61 +72,20 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
 
     # Load PS data
     ps_data = read_h5(os.path.join(patch_dir, psname))
-    bp_data = read_h5(os.path.join(patch_dir, bpname))
-
-    n_ps_int = int(ps_data['n_ps'])
-    n_ifg = int(ps_data['n_ifg'])
 
     # Load baseline perpendicular matrix and version
     bp_data = read_h5(os.path.join(patch_dir,bpname))
 
-    # Extract bperp_mat
-    if 'bperp_mat' in bp_data:
-        bperp_mat = bp_data['bperp_mat']
-        print(f"Original bperp_mat shape: {bperp_mat.shape}")  # Debugging statement
-
-        # Transpose to get shape (3354, 62)
-        #bperp_mat = bperp_mat.T  # Transpose to (3354, 62)
-        bp_data['bperp_mat'] = bperp_mat
-        print(f"Transposed bperp_mat shape: {bperp_mat.shape}")  # Debugging statement
-    else:
-        raise KeyError("'bperp_mat' not found in bp_data")
-
-    # Ensure n_ifg is set correctly
-    n_ifg = bperp_mat.shape[1]  # Should be 62
-
     # Load or create D_A
-    if os.path.exists(os.path.join(patch_dir,daname)):
-        da_data = read_h5(os.path.join(patch_dir,daname))
-        D_A = da_data['D_A']
-    else:
-        D_A = np.ones((n_ps_int, 1), dtype=np.float64)
+    D_A = read_h5(os.path.join(patch_dir,daname))['D_A']
 
     # Load phase data
-    if os.path.exists(os.path.join(patch_dir,phname)):
-        ph_data = read_h5(os.path.join(patch_dir,phname))
-        ph = ph_data['ph']
-    else:
-        ph = ps_data['ph']
-
-    # Convert to complex if MATLAB stored real/imag fields separately
-    if (
-        hasattr(ph, 'dtype') and
-        ph.dtype.fields is not None and
-        'real' in ph.dtype.fields and
-        'imag' in ph.dtype.fields
-    ):
-        ph_complex = ph['real'] + 1j * ph['imag']
-        ph = ph_complex
-
-    # Ensure ph has the correct shape
-    #ph = ph.T  # Transpose to (3354, 63)
-    print(f"ph shape after transpose: {ph.shape}")  # Debugging statement
+    ph = read_h5(os.path.join(patch_dir,phname))['ph']
 
     # Exclude master image from ph and bperp
     master_ix = int(ps_data['master_ix'])
-    ph = np.delete(ph, master_ix, axis=1)  # Remove master row from ph
-    bperp = np.delete(ps_data['bperp'], master_ix)  # Remove master from bperp
+    ph = np.delete(ph, master_ix, axis=1)
+    bperp = np.delete(ps_data['bperp'], master_ix)
     n_ifg = int(ps_data['n_ifg'])-1
     n_ps = int(ps_data['n_ps'])
     xy = ps_data['xy']
@@ -139,15 +97,11 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # Normalize ph
     A = np.abs(ph).astype(np.float32)
     A[A == 0] = 1.0
-    ph = ph / A  # Normalizing each pixel's phase
+    ph = ph / A
 
     # Incidence angle
-    if os.path.exists(os.path.join(patch_dir,laname)):
-        print('Found look angle file')
-        la_data = read_h5(os.path.join(patch_dir,laname))
-        inc_mean = np.mean(la_data['la']) + 0.052  # approximate relation
-    else:
-        inc_mean = 21.0 * np.pi / 180.0  # fallback guess
+    la_data = read_h5(os.path.join(patch_dir,laname))
+    inc_mean = np.mean(la_data['la']) + 0.052
 
     # Max K and approximate number of trial wraps
     bperp_range = float(np.max(bperp) - np.min(bperp))
@@ -170,67 +124,35 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # Generate random-phase distribution
     rand_ifg = 2.0 * np.pi * np.random.rand(n_rand, n_ifg)
 
-    # Compute coherence using both methods and time them
-    # 1. Original numpy implementation
-    # coh_rand_np = np.zeros(n_rand, dtype=np.float64)
-    # start_time_np = time.time()
-    # for i_rand in range(n_rand - 1, -1, -1):
-    #     K_r, C_r, coh_r, _ = ps_topofit(
-    #         np.exp(1j * rand_ifg[i_rand, :]),
-    #         bperp,
-    #         n_trial_wraps,
-    #         'n'
-    #     )
-    #     print(f"Processing pixel {i_rand}, coherence = {coh_r}")
-    #     coh_rand_np[i_rand] = coh_r
-    # np_time = time.time() - start_time_np
-    # print(f'NumPy implementation took {np_time:.2f} seconds')
-
     # 2. PyTorch implementation
     start_time_torch = time.time()
     coh_rand_torch = compute_coh_rand_with_pytorch(rand_ifg, bperp, n_trial_wraps)
     torch_time = time.time() - start_time_torch
     print(f'PyTorch implementation took {torch_time:.2f} seconds')
 
-    # # Compare results
-    # mean_diff = np.mean(np.abs(coh_rand_np - coh_rand_torch))
-    # max_diff = np.max(np.abs(coh_rand_np - coh_rand_torch))
-    # logit(f'Mean absolute difference between implementations: {mean_diff:.6f}')
-    # logit(f'Max absolute difference between implementations: {max_diff:.6f}')
-    # logit(f'Speedup factor: {np_time/torch_time:.2f}x')
-
     # Use the PyTorch results for subsequent processing
     coh_rand = coh_rand_torch
 
     # Build histogram (matching MATLAB's behavior)
-    coh_bins = np.arange(0.005, 0.996, 0.01)  # bin centers
-    # bin_edges = coh_bins - 0.005  # create bin edges
-    # bin_edges = np.append(bin_edges, bin_edges[-1] + 0.01)  # add last edge
-    # Nr, _ = np.histogram(coh_rand, bins=bin_edges)
-    bin_edges = np.arange(0, 1.001, 0.01)     # bin edges from 0 to 1 inclusive
+    coh_bins = np.arange(0.005, 0.996, 0.01)
+    bin_edges = np.arange(0, 1.001, 0.01)
     Nr, _ = np.histogram(coh_rand, bins=bin_edges, density=False)
 
-    # Find last non-zero index (matching MATLAB's behavior)
-    i_stop = len(Nr) - 1
-    while i_stop >= 0 and Nr[i_stop] == 0:
-        i_stop -= 1
-    Nr_max_nz_ix = i_stop
+    # Find last non-zero index more efficiently
+    Nr_max_nz_ix = len(Nr) - 1 - np.argmax(Nr[::-1] != 0)
 
     # Initialize arrays
     step_number = 1
+    n_ps_int = int(ps_data['n_ps'])
     K_ps = np.zeros(n_ps_int, dtype=np.float64)
     C_ps = np.zeros(n_ps_int, dtype=np.float64)
     coh_ps = np.zeros(n_ps_int, dtype=np.float64)
-    coh_ps_save = np.zeros(n_ps_int, dtype=np.float64)
     N_opt = np.zeros(n_ps_int, dtype=np.float64)
 
     # ph_patch and ph_res should have shape (n_ps_int, n_ifg)
     ph_res = np.zeros((n_ps_int, n_ifg), dtype=np.float32)
     ph_patch = np.zeros((n_ps_int, n_ifg), dtype=np.complex64)
 
-    # grid_ij in MATLAB uses y in col1, x in col2
-    # if xy has shape (n_ps,3), assume third column is y, second is x
-    # if xy has shape (n_ps,2), assume column1 is x, column2 is y
     if xy.shape[1] >= 3:
         y_vals = xy[:, 2]
         x_vals = xy[:, 1]
@@ -254,26 +176,9 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
 
     i_loop = 1
     weighting = 1.0 / D_A.ravel()
-    weighting_save = weighting.copy()
-    gamma_change_save = 0.0
 
     # Ensure arrays are allocated if partial or no restart
     n_ps_int = int(n_ps_int)
-    if K_ps is None:
-        K_ps = np.zeros(n_ps_int, dtype=np.float64)
-    if C_ps is None:
-        C_ps = np.zeros(n_ps_int, dtype=np.float64)
-    if coh_ps is None:
-        coh_ps = np.zeros(n_ps_int, dtype=np.float64)
-    if N_opt is None:
-        N_opt = np.zeros(n_ps_int, dtype=np.float64)
-
-    if ph_res is None:
-        ph_res = np.zeros((n_ps_int, n_ifg), dtype=np.complex64)
-    if ph_patch is None:
-        ph_patch = np.zeros((n_ps_int, n_ifg), dtype=np.complex64)
-    if 'coh_ps_save' not in locals():
-        coh_ps_save = np.zeros(n_ps_int, dtype=np.float64)
 
     # Number of grid cells
     n_i = np.max(grid_ij[:, 0]) 
@@ -286,6 +191,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # --------------------
     # Main iteration loop
     # --------------------
+    coh_ps_temp = np.zeros(n_ps_int, dtype=np.float64)
     while loop_end_sw == 0:
         print(f'iteration #{i_loop}')
         print('Calculating patch phases...')
@@ -298,32 +204,14 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         K_ps = K_ps.reshape((n_ps_int, 1)) if K_ps.ndim == 1 else K_ps
         weighting = weighting.reshape((n_ps_int, 1)) if weighting.ndim == 1 else weighting
 
-        # --- Corrected ph_weight calculation ---
-        # Ensure bp_data['bperp_mat'] has shape (n_ps, n_ifg)
-        # K_ps and weighting have shape (n_ps, 1)
-
-        # Assertions to verify shapes
-        assert bp_data['bperp_mat'].shape == (n_ps_int, n_ifg), \
-            f"Expected bp_data['bperp_mat'] shape to be ({n_ps_int}, {n_ifg}), but got {bp_data['bperp_mat'].shape}"
-        assert K_ps.shape == (n_ps_int, 1), \
-            f"Expected K_ps shape to be ({n_ps_int}, 1), but got {K_ps.shape}"
-        assert weighting.shape == (n_ps_int, 1), \
-            f"Expected weighting shape to be ({n_ps_int}, 1), but got {weighting.shape}"
-        assert ph.shape == (n_ps_int, n_ifg), \
-            f"Expected ph shape to be ({n_ps_int}, {n_ifg}), but got {ph.shape}"
-
         # Vectorized ph_weight calculation
-        phase_factor = np.exp(-1j * bp_data['bperp_mat'] * K_ps)  # Shape: (3354, 62)
-        ph_weight = ph * phase_factor * weighting                  # Shape: (3354, 62)
-
-        # Debugging statements
-        print(f"phase_factor.shape: {phase_factor.shape}")  # Should be (3354, 62)
-        print(f"ph_weight.shape: {ph_weight.shape}")        # Should be (3354, 62)
+        phase_factor = np.exp(-1j * bp_data['bperp_mat'] * K_ps)
+        ph_weight = ph * phase_factor * weighting
 
         # Accumulate into ph_grid
         for i_ps in range(n_ps_int):
-            gi, gj = grid_ij[i_ps] - 1 # MATLAB to Python index
-            ph_grid[gi, gj, :] += ph_weight[i_ps, :] # Verified, this comes calculated correctly
+            gi, gj = grid_ij[i_ps] - 1
+            ph_grid[gi, gj, :] += ph_weight[i_ps, :]
 
         # Filter each IFG slice
         for i_ifg in range(n_ifg):
@@ -345,13 +233,11 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         nz_idx = (np.abs(ph_patch) != 0)
         ph_patch[nz_idx] = ph_patch[nz_idx] / np.abs(ph_patch[nz_idx])
 
-        # If restart_flag < 2 => estimate topo error
         print('Estimating topo error...')
         step_number = 2
 
         for i_ps in range(n_ps_int):
             psdph = ph[i_ps, :] * np.conj(ph_patch[i_ps, :])
-            # Must have no zero in psdph
             if np.all(psdph != 0):
                 Kopt, Copt, cohopt, ph_residual = ps_topofit(
                     psdph,
@@ -363,26 +249,22 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
                 K_ps[i_ps] = Kopt
                 C_ps[i_ps] = Copt
                 coh_ps[i_ps] = cohopt
-                # if(i_ps == 470):
-                #     print(Kopt, Copt, cohopt)
-                N_opt[i_ps] = 1 # len(Kopt) is 1 as Kopt is a scalar
+                N_opt[i_ps] = 1 
                 ph_res[i_ps, :] = np.angle(ph_residual)
             else:
                 K_ps[i_ps] = np.nan
                 coh_ps[i_ps] = 0.0
 
-            if (i_ps + 1) % 100000 == 0:
-                print(f'{i_ps + 1} PS processed', 2)
-
         # Return to step_number=1 after this block
         step_number = 1
+        gamma_change_save = 0.0
 
         # Check convergence
-        gamma_change_rms = np.sqrt(np.mean((coh_ps - coh_ps_save) ** 2))
+        gamma_change_rms = np.sqrt(np.mean((coh_ps - coh_ps_temp) ** 2))
         gamma_change_change = gamma_change_rms - gamma_change_save
         print(f'gamma_change_change={gamma_change_change}')
         gamma_change_save = gamma_change_rms
-        coh_ps_save = coh_ps.copy()
+        coh_ps_temp = coh_ps.copy()
 
         # Retrieve convergence parameters
         gamma_change_convergence = float(parms['gamma_change_convergence'])
@@ -471,7 +353,6 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             'Nr':Nr_scaled, # wrong, comes int but is float on matlab
             'Nr_max_nz_ix':Nr_max_nz_ix,
             'coh_bins':coh_bins,
-            'coh_ps_save':coh_ps_save,
             'gamma_change_save':gamma_change_save
             }
         )
