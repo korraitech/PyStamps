@@ -3,11 +3,10 @@ import torch
 import time
 import os
 from scipy.interpolate import interp1d
-from .utils import read_h5
+from .utils import read_h5,save_h5
 from .ps_topofit_numpy import ps_topofit
 from .ps_topofit_torch import ps_topofit_torch
 from .clap_filt import clap_filt
-from .stamps_save import stamps_save
 
 def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     """
@@ -332,7 +331,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
                 weighting = weighting_new
 
         # Save partial results in each iteration
-        stamps_save(
+        save_h5(
             patch_dir,
             pmname,
             **{

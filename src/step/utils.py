@@ -1,5 +1,6 @@
-import h5py as h5
+import h5py as hp
 import numpy as np
+import os
 
 def read_lines(path:str) -> list[str]:
     """
@@ -25,5 +26,36 @@ def read_h5(filename) -> dict:
     """
     Load .h5 file using h5py.
     """ 
-    with h5.File(filename, 'r') as f:
+    with hp.File(filename, 'r') as f:
         return {k: np.array(v) for k, v in f.items()}
+
+def append_to_hdf5(save_path, save_dict):
+    print('Appending to existing HDF5 file...')
+    with hp.File(save_path, 'a') as f:
+        for key, value in save_dict.items():
+            if key in f:
+                del f[key]
+            f.create_dataset(key, data=value)
+
+def save_to_hdf5(save_path, save_dict):
+    print('Saving in HDF5 format')
+    with hp.File(save_path, 'w') as f:
+        for key, value in save_dict.items():
+            f.create_dataset(key, data=value)
+
+def save_h5(output_dir:str,file_name:str, **kwargs):
+    """
+    Save variables to a file, handling large datasets appropriately.
+    
+    Parameters:
+        output_dir (str, optional): Directory to save output files.
+        save_name (str): Name of the file to save to
+        **kwargs: Named variables to save (optional)
+    """
+    save_path = os.path.join(output_dir, file_name)
+    save_dict = kwargs
+
+    if os.path.exists(save_path):
+        append_to_hdf5(save_path, save_dict)
+    else:
+        save_to_hdf5(save_path, save_dict)

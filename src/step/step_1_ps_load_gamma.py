@@ -3,8 +3,7 @@ import os
 import h5py
 from datetime import datetime
 from .llh2local import llh2local
-from .utils import read_lines,get_par,read_h5
-from .stamps_save import stamps_save
+from .utils import read_lines,get_par,read_h5,save_h5
 
 def step_1_ps_load_gamma(workdir:str, patch:str):
     """
@@ -208,7 +207,7 @@ def step_1_ps_load_gamma(workdir:str, patch:str):
     days_str = days_str.astype('S')
     master_date_str = np.array([master_date.strftime('%Y-%m-%d %H:%M:%S')])
     master_date_str = master_date_str.astype('S')
-    stamps_save(patch_dir,savename,
+    save_h5(patch_dir,savename,
         **{"ij":ij, "lonlat":lonlat, "xy":xy, "bperp":bperp, "days_str":days_str, 
          "master_date_str":master_date_str, "master_ix":master_ix,"n_ifg":n_ifg, 
          "n_image":n_image, "n_ps":n_ps, "sort_ix":sort_ix, "ll0":ll0, 
@@ -217,29 +216,29 @@ def step_1_ps_load_gamma(workdir:str, patch:str):
     # Save phase data
     phsavename = f'ph{psver}.h5'
     ph = ph[~ix_nan]
-    stamps_save(patch_dir,phsavename, **{"ph":ph})
+    save_h5(patch_dir,phsavename, **{"ph":ph})
     
     # Save baseline data
     bpsavename = f'bp{psver}.h5'
     bperp_mat = bperp_mat[~ix_nan]
-    stamps_save(patch_dir, bpsavename, **{"bperp_mat":bperp_mat})
+    save_h5(patch_dir, bpsavename, **{"bperp_mat":bperp_mat})
     
     # Save look angle data
     lasavename = f'la{psver}.h5'
     la = inci[sort_ix]  # store incidence not look angle for gamma
     la = la[~ix_nan]
-    stamps_save(patch_dir, lasavename, **{"la":la})
+    save_h5(patch_dir, lasavename, **{"la":la})
     
     # Save D_A if exists
     D_A = read_h5(dapath)["data"]
     D_A = D_A[sort_ix]
     D_A = D_A[~ix_nan]
     dasavename = f'da{psver}.h5'
-    stamps_save(patch_dir, dasavename, **{"D_A":D_A})
+    save_h5(patch_dir, dasavename, **{"D_A":D_A})
     
     # Save height if exists
     hgt = read_h5(htpath)["data"]
     hgt = hgt[sort_ix]
     hgt = hgt[~ix_nan]
     hgtsavename = f'hgt{psver}.h5'
-    stamps_save(patch_dir, hgtsavename, **{"hgt":hgt})
+    save_h5(patch_dir, hgtsavename, **{"hgt":hgt})
