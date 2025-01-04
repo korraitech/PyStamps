@@ -202,9 +202,15 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # Use the PyTorch results for subsequent processing
     coh_rand = coh_rand_torch
 
-    # Build histogram (coh_bins = 0.005:0.01:0.995)
-    coh_bins = np.arange(0.005, 0.996, 0.01)
-    Nr, _ = np.histogram(coh_rand, bins=coh_bins)
+    # Build histogram (matching MATLAB's behavior)
+    coh_bins = np.arange(0.005, 0.996, 0.01)  # bin centers
+    # bin_edges = coh_bins - 0.005  # create bin edges
+    # bin_edges = np.append(bin_edges, bin_edges[-1] + 0.01)  # add last edge
+    # Nr, _ = np.histogram(coh_rand, bins=bin_edges)
+    bin_edges = np.arange(0, 1.001, 0.01)     # bin edges from 0 to 1 inclusive
+    Nr, _ = np.histogram(coh_rand, bins=bin_edges, density=False)
+
+    # Find last non-zero index (matching MATLAB's behavior)
     i_stop = len(Nr) - 1
     while i_stop >= 0 and Nr[i_stop] == 0:
         i_stop -= 1
@@ -330,8 +336,6 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
                 low_pass
             )
 
-        # correct till here
-
         # Extract patch value per PS
         for i_ps in range(n_ps_int):
             gi, gj = grid_ij[i_ps] - 1 # MATLAB to Python index
@@ -390,13 +394,11 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         else:
             i_loop += 1
             # Reweighting
-            if str(filter_weighting[0]).lower().startswith('p-square'):
-                Na, _ = np.histogram(coh_ps, bins=coh_bins)
+            if str(filter_weighting).lower().startswith('p-square'):
+                Na, _ = np.histogram(coh_ps, bins=bin_edges, density=False)
                 # Scale random distribution using low_coh_thresh
-                scale_num = np.sum(Na[:low_coh_thresh]) if low_coh_thresh <= len(Na) else np.sum(Na)
-                scale_den = np.sum(Nr[:low_coh_thresh]) if low_coh_thresh <= len(Nr) else np.sum(Nr)
-                if scale_den == 0:
-                    scale_den = 1
+                scale_num = np.sum(Na[:low_coh_thresh])
+                scale_den = np.sum(Nr[:low_coh_thresh])
                 Nr_scaled = Nr * (scale_num / scale_den)
 
                 Na_safe = Na.copy()
@@ -456,7 +458,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             'K_ps':K_ps,
             'C_ps':C_ps,
             'coh_ps':coh_ps,
-            'N_opt':N_opt, # wrong on val 472 of matlab and 471 in python
+            'N_opt':N_opt, 
             'ph_res':ph_res, 
             'step_number':step_number,
             'ph_grid':ph_grid,
@@ -466,8 +468,8 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             'low_pass':low_pass,
             'i_loop':i_loop,
             'ph_weight':ph_weight,
-            'Nr':Nr, # wrong, comes int but is float on matlab
-            'Nr_max_nz_ix':Nr_max_nz_ix, # wrong, comes 42 but is 50 on matlab
+            'Nr':Nr_scaled, # wrong, comes int but is float on matlab
+            'Nr_max_nz_ix':Nr_max_nz_ix,
             'coh_bins':coh_bins,
             'coh_ps_save':coh_ps_save,
             'gamma_change_save':gamma_change_save
