@@ -2,7 +2,7 @@ import os
 import numpy as np
 from .utils import read_h5,save_h5
 from .clap_filt import clap_filt
-from .ps_topofit_torch import ps_topofit_torch
+from .ps_topofit_numpy import ps_topofit
 
 def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     """
@@ -400,10 +400,10 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
         if np.all(psdph != 0):
             psdph_norm = psdph / np.abs(psdph)
             # if bperp is 1D => pass single row. If 2D => pass row
-            Kopt, Copt, cohopt, ph_residual = ps_topofit_torch(
+            Kopt, Copt, cohopt, ph_residual = ps_topofit(
                 psdph_norm,
                 bperp if bperp.ndim == 1 else bperp[ps_idx, :],
-                pm_data['n_trial_wraps'][0][0] if 'n_trial_wraps' in pm_data else 1,
+                float(pm_data['n_trial_wraps']),
                 'n'
             )
             K_ps2[i_count] = Kopt
@@ -414,6 +414,8 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
             K_ps2[i_count] = np.nan
             coh_ps2[i_count] = np.nan
 
+        if i_count == 50:
+            break
     # Update pm_data
     pm_data['coh_ps'][ix] = coh_ps2
 
@@ -527,36 +529,40 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     n_after_reest = np.sum(keep_ix)
     print(f"{n_after_reest} ps selected after re-estimation of coherence")
 
-    # possibly store info about # PS left
-    # no_ps_info => "no_ps_info.mat"
-    no_ps_info_file = 'no_ps_info.mat'
-    stamps_step_no_ps = None
-    if os.path.exists(no_ps_info_file):
-        tmp_data = load_mat(no_ps_info_file)
-        if 'stamps_step_no_ps' in tmp_data:
-            stamps_step_no_ps = tmp_data['stamps_step_no_ps'].flatten()
-    else:
-        # create new
-        stamps_step_no_ps = np.zeros(5, dtype=int)  # just as shown in ps_select
+    # # possibly store info about # PS left
+    # # no_ps_info => "no_ps_info.mat"
+    # no_ps_info_file = 'no_ps_info.mat'
+    # stamps_step_no_ps = None
+    # if os.path.exists(no_ps_info_file):
+    #     tmp_data = load_mat(no_ps_info_file)
+    #     if 'stamps_step_no_ps' in tmp_data:
+    #         stamps_step_no_ps = tmp_data['stamps_step_no_ps'].flatten()
+    # else:
+    #     # create new
+    #     stamps_step_no_ps = np.zeros(5, dtype=int)  # just as shown in ps_select
 
-    if stamps_step_no_ps is not None and len(stamps_step_no_ps) >= 3:
-        if np.sum(keep_ix) == 0:
-            logit("***No PS points left. Updating the stamps log for this***")
-            stamps_step_no_ps[2] = 1  # step index 3 => array index 2
-        # re-save
-        # In Python, to store it again:
-        # we can do a stamps_save or some specialized code. We'll do a minimal approach:
-        # a minimal approach: let's use stamps_save if it can handle np arrays
-        # or do custom code:
-        stamps_save(no_ps_info_file, stamps_step_no_ps)
-    else:
-        print("WARNING: no_ps_info did not match expected structure. Skipping that update.")
+    # if stamps_step_no_ps is not None and len(stamps_step_no_ps) >= 3:
+    #     if np.sum(keep_ix) == 0:
+    #         logit("***No PS points left. Updating the stamps log for this***")
+    #         stamps_step_no_ps[2] = 1  # step index 3 => array index 2
+    #     # re-save
+    #     # In Python, to store it again:
+    #     # we can do a stamps_save or some specialized code. We'll do a minimal approach:
+    #     # a minimal approach: let's use stamps_save if it can handle np arrays
+    #     # or do custom code:
+    #     stamps_save(no_ps_info_file, stamps_step_no_ps)
+    # else:
+    #     print("WARNING: no_ps_info did not match expected structure. Skipping that update.")
 
     ifg_index = np.array(no_master_ix)
     # Remove drop_ifg_index from ifg_index if needed
     if len(drop_ifg_index) > 0:
         ifg_index = np.array([x for x in ifg_index if x not in drop_ifg_index])
 
-    save_h5(selectname, ix, keep_ix, ph_patch2, ph_res2, K_ps2, C_ps2, coh_ps2,
-               coh_thresh, coh_thresh_coeffs, clap_alpha, clap_beta,
-               clap_win, max_percent_rand, gamma_stdev_reject,ifg_index)
+    save_h5(patch_dir, selectname, 
+            **{"ix":ix, "keep_ix":keep_ix, "ph_patch2":ph_patch2, 
+               "ph_res2":ph_res2, "K_ps2":K_ps2, "C_ps2":C_ps2, 
+               "coh_ps2":coh_ps2,"coh_thresh":coh_thresh, 
+               "coh_thresh_coeffs":coh_thresh_coeffs, "clap_alpha":clap_alpha, 
+               "clap_beta":clap_beta,"clap_win":clap_win, "max_percent_rand":max_percent_rand, 
+               "gamma_stdev_reject":gamma_stdev_reject, "ifg_index":ifg_index})
