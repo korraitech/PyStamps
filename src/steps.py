@@ -7,6 +7,7 @@ from .step.step_2_ps_estm_gamma import step_2_ps_estm_gamma
 from .step.step_3_ps_select import step_3_ps_select
 from .step.step_5a_ps_correct_phase import step_5a_ps_correct_phase
 from .step.step_aps_linear import step_aps_linear
+from .step.step_6_ps_unwrap import step_6_ps_unwrap
 from .step.step_7a_ps_calc_scla import step_7a_ps_calc_scla
 from .step.step_7b_ps_smooth_scla import step_7b_ps_smooth_scla
 from multiprocessing.pool import ThreadPool
@@ -26,6 +27,7 @@ def patch_task(parmas:dict):
     step_3_ps_select(workdir,patch,parms)
     step_5a_ps_correct_phase(workdir,patch,parms)
     step_aps_linear(workdir)
+    step_6_ps_unwrap(workdir,parms)
     step_7a_ps_calc_scla(workdir,parms)
     step_7b_ps_smooth_scla(workdir)
 

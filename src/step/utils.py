@@ -59,3 +59,50 @@ def save_h5(output_dir:str,file_name:str, **kwargs):
         append_to_hdf5(save_path, save_dict)
     else:
         save_to_hdf5(save_path, save_dict)
+
+def writecpx(workdir:str,fname:str, vname:np.array, precision='float', endian='n'):
+    """
+    Translate the MATLAB writecpx.m into Python.
+    Writes the real and imaginary parts of vname to a binary file (fname),
+    interleaving them (real, imag, real, imag, ...).
+    
+    :param fname: Output file name (string)
+    :param vname: Complex NumPy array to write
+    :param precision: 'float' or 'double' (default 'float'), matches MATLAB usage
+    :param endian: Endianness: 'n' for native, 'l' for little, 'b' for big (default 'n')
+    """
+    # Map MATLAB precisions to NumPy data types
+    type_map = {
+        'float': 'f4',   # 'float32' in NumPy
+        'double': 'f8'   # 'float64' in NumPy
+    }
+
+    # Map MATLAB endianness notation to NumPy
+    endian_map = {
+        'n': '=',  # native
+        'l': '<',  # little
+        'b': '>'   # big
+    }
+
+    # Ensure valid inputs
+    if precision not in type_map:
+        raise ValueError(f"Unsupported precision '{precision}'. Use 'float' or 'double'.")
+    if endian not in endian_map:
+        raise ValueError(f"Unsupported endian '{endian}'. Use 'n', 'l', or 'b'.")
+
+    # Construct the NumPy dtype with the requested precision and endianness
+    dtype_str = endian_map[endian] + type_map[precision]
+    out_dtype = np.dtype(dtype_str)
+    
+    # Create the interleaved real/imag data
+    # MATLAB shape: (rows, 2 * cols), then transposed
+    rows, cols = vname.shape
+    vname_flt = np.zeros((rows, 2 * cols), dtype=np.float64)
+    vname_flt[:, 0::2] = vname.real
+    vname_flt[:, 1::2] = vname.imag
+    
+    # Write to file in binary: replicate fwrite(fid, vname_flt.', 'precision')
+    # i.e. we transpose it. Then ensure the correct dtype, then tofile.
+    with open(fname, 'wb') as f:
+        vname_flt.T.astype(out_dtype).tofile(f)
+
