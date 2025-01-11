@@ -64,8 +64,7 @@ def read_meta(path:str):
     return meta
 
 def create_patch(workdir,length,width,prg,paz,overlap_rg,overlap_az):
-    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {} {} {} {} {} {}".format(get_module_info(),
-         workdir,length,width,prg,paz,overlap_rg,overlap_az))
+    appLogger.info(">>>>>>>>>>>>>>>> {}".format(get_module_info()))
     length_p = int(length / paz)
     width_p = int(width / prg)
     irg = 0
@@ -94,7 +93,7 @@ def create_patch(workdir,length,width,prg,paz,overlap_rg,overlap_az):
     return patch_list
 
 def task_cands(params):
-    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {}".format(get_module_info(),params))
+    appLogger.info(">>>>>>>>>>>>>>>> {}".format(get_module_info()))
     workdir = params["workdir"]
     patchdir = os.path.join(workdir,params["patch"])
     pscands_ij = os.path.join(patchdir,'pscands_ij.h5')
