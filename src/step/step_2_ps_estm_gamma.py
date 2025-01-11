@@ -235,6 +235,8 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         print('Estimating topo error...')
         step_number = 2
 
+        # Time the slow version
+        start_time_slow = time.time()
         for i_ps in range(n_ps_int):
             psdph = ph[i_ps, :] * np.conj(ph_patch[i_ps, :])
             if np.all(psdph != 0):
@@ -253,6 +255,68 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             else:
                 K_ps[i_ps] = np.nan
                 coh_ps[i_ps] = 0.0
+        slow_time = time.time() - start_time_slow
+        print(f'Slow version took {slow_time:.2f} seconds')
+
+        # Now do the fast batched version with PyTorch
+        start_time_fast = time.time()
+        
+        # Prepare all psdph at once
+        psdph_all = ph * np.conj(ph_patch)
+        valid_ps = np.all(psdph_all != 0, axis=1)
+        
+        # Convert to PyTorch tensors
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        psdph_valid = torch.tensor(psdph_all[valid_ps], dtype=torch.complex64).to(device)
+        
+        # Handle bperp tensor creation
+        if bperp.ndim == 2 and bperp.shape[0] == n_ps_int:
+            bperp_valid = torch.tensor(bperp[valid_ps], dtype=torch.float64).to(device)
+        else:
+            bperp_valid = torch.tensor(bperp, dtype=torch.float64).expand(np.sum(valid_ps), -1).to(device)
+
+        # Process in batches
+        batch_size = 1000  # Adjust based on your GPU memory
+        n_valid = len(psdph_valid)
+        
+        K_ps_fast = np.full(n_ps_int, np.nan)
+        C_ps_fast = np.zeros(n_ps_int)
+        coh_ps_fast = np.zeros(n_ps_int)
+        N_opt_fast = np.zeros(n_ps_int)
+        ph_res_fast = np.zeros((n_ps_int, n_ifg), dtype=np.float32)
+
+        for batch_start in range(0, n_valid, batch_size):
+            batch_end = min(batch_start + batch_size, n_valid)
+            batch_psdph = psdph_valid[batch_start:batch_end]
+            batch_bperp = bperp_valid[batch_start:batch_end]
+            
+            K_batch, C_batch, coh_batch, ph_res_batch = ps_topofit_torch(
+                batch_psdph,
+                batch_bperp,
+                n_trial_wraps,
+                'n'
+            )
+            
+            # Get the original indices for this batch
+            valid_indices = np.where(valid_ps)[0][batch_start:batch_end]
+            
+            # Store results
+            K_ps_fast[valid_indices] = K_batch.cpu().numpy()
+            C_ps_fast[valid_indices] = C_batch.cpu().numpy()
+            coh_ps_fast[valid_indices] = coh_batch.cpu().numpy()
+            N_opt_fast[valid_indices] = 1
+            ph_res_fast[valid_indices] = np.angle(ph_res_batch.cpu().numpy())
+
+        fast_time = time.time() - start_time_fast
+        print(f'Fast version took {fast_time:.2f} seconds')
+        print(f'Speedup: {slow_time/fast_time:.2f}x')
+
+        # Use the results from the fast version
+        K_ps = K_ps_fast
+        C_ps = C_ps_fast
+        coh_ps = coh_ps_fast
+        N_opt = N_opt_fast
+        ph_res = ph_res_fast
 
         # Return to step_number=1 after this block
         step_number = 1
