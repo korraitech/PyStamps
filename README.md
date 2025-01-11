@@ -23,3 +23,7 @@ urbansar service using SNAP and STAMPS
     # Now run the  command
     python3 main.py
     ```
+
+
+
+wget https://korraicom-my.sharepoint.com/:u:/g/personal/rahul_sharan_korrai_com/EZNlyaVVCmRIlH8NKs1wvaAB5A88NyRtqfwAdDjMW6BP9w?download=1

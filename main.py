@@ -1,5 +1,5 @@
 #########################################################################
-#   Copyright 2022 - 2023, KorrAI                                       #
+#   Copyright 2024 - 2025, KorrAI                                       #
 #   ALL RIGHTS RESERVED.                                                #
 #   This file is subject to the full copyright and disclaimer notice    #
 #   included in a separate file in this directory.                      #
@@ -29,6 +29,5 @@ if __name__ == "__main__":
     print("==========================================")
     print ("Starting Stamps Service !!!!")
     print("==========================================")
-
     args = read_input()
     run_service(args)

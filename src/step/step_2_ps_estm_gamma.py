@@ -3,9 +3,11 @@ import torch
 import time
 import os
 from scipy.interpolate import interp1d
+from ..misc import get_module_info
+from ..logger import appLogger
 from .utils import read_h5,save_h5
-from .ps_topofit_numpy import ps_topofit
-from .ps_topofit_torch import ps_topofit_torch
+from .random_coh import random_coh
+from .ps_topofit_torch2 import ps_topofit_torch2
 from .clap_filt import clap_filt
 
 def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
@@ -23,8 +25,9 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         patch:str - patch currently being processed
         parms:dict - parameters from parms.json
     """
-    print("Running Step-02 ...\t[{}]".format(patch))
-    print('Estimating gamma for candidate pixels...')
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {}".format(
+            get_module_info(),workdir, patch)
+    )
     patch_dir = os.path.join(workdir,patch)
 
     # Constants
@@ -125,7 +128,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
 
     # 2. PyTorch implementation
     start_time_torch = time.time()
-    coh_rand_torch = compute_coh_rand_with_pytorch(rand_ifg, bperp, n_trial_wraps)
+    coh_rand_torch = random_coh(rand_ifg, bperp, n_trial_wraps)
     torch_time = time.time() - start_time_torch
     print(f'PyTorch implementation took {torch_time:.2f} seconds')
 
@@ -190,6 +193,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # --------------------
     # Main iteration loop
     # --------------------
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     coh_ps_temp = np.zeros(n_ps_int, dtype=np.float64)
     while loop_end_sw == 0:
         print(f'iteration #{i_loop}')
@@ -234,39 +238,12 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
 
         print('Estimating topo error...')
         step_number = 2
-
-        # Time the slow version
-        start_time_slow = time.time()
-        for i_ps in range(n_ps_int):
-            psdph = ph[i_ps, :] * np.conj(ph_patch[i_ps, :])
-            if np.all(psdph != 0):
-                Kopt, Copt, cohopt, ph_residual = ps_topofit(
-                    psdph,
-                    bperp[i_ps, :] if (bperp.ndim == 2 and bperp.shape[0] == n_ps_int) else bperp,
-                    n_trial_wraps,
-                    'n'
-                )
-                # First solution
-                K_ps[i_ps] = Kopt
-                C_ps[i_ps] = Copt
-                coh_ps[i_ps] = cohopt
-                N_opt[i_ps] = 1 
-                ph_res[i_ps, :] = np.angle(ph_residual)
-            else:
-                K_ps[i_ps] = np.nan
-                coh_ps[i_ps] = 0.0
-        slow_time = time.time() - start_time_slow
-        print(f'Slow version took {slow_time:.2f} seconds')
-
-        # Now do the fast batched version with PyTorch
-        start_time_fast = time.time()
-        
+    
         # Prepare all psdph at once
         psdph_all = ph * np.conj(ph_patch)
         valid_ps = np.all(psdph_all != 0, axis=1)
         
         # Convert to PyTorch tensors
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         psdph_valid = torch.tensor(psdph_all[valid_ps], dtype=torch.complex64).to(device)
         
         # Handle bperp tensor creation
@@ -290,11 +267,10 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             batch_psdph = psdph_valid[batch_start:batch_end]
             batch_bperp = bperp_valid[batch_start:batch_end]
             
-            K_batch, C_batch, coh_batch, ph_res_batch = ps_topofit_torch(
+            K_batch, C_batch, coh_batch, ph_res_batch = ps_topofit_torch2(
                 batch_psdph,
                 batch_bperp,
                 n_trial_wraps,
-                'n'
             )
             
             # Get the original indices for this batch
@@ -306,10 +282,6 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             coh_ps_fast[valid_indices] = coh_batch.cpu().numpy()
             N_opt_fast[valid_indices] = 1
             ph_res_fast[valid_indices] = np.angle(ph_res_batch.cpu().numpy())
-
-        fast_time = time.time() - start_time_fast
-        print(f'Fast version took {fast_time:.2f} seconds')
-        print(f'Speedup: {slow_time/fast_time:.2f}x')
 
         # Use the results from the fast version
         K_ps = K_ps_fast
@@ -419,48 +391,3 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             'gamma_change_save':gamma_change_save
             }
         )
-
-    # Just like MATLAB, after while loop ends => logit(1)
-    # End of function
-
-def compute_coh_rand_with_pytorch(rand_ifg, bperp, n_trial_wraps):
-    """
-    Compute coherence using PyTorch with true batch processing.
-    """
-    # Convert inputs to PyTorch tensors
-    rand_ifg_tensor = torch.tensor(rand_ifg, dtype=torch.float64)
-    bperp_tensor = torch.tensor(bperp, dtype=torch.float64)
-
-    # Move tensors to GPU if available
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    rand_ifg_tensor = rand_ifg_tensor.to(device)
-    bperp_tensor = bperp_tensor.to(device)
-
-    # Convert all random phases to complex exponentials at once
-    # Shape: [n_rand, n_ifg]
-    exp_rand_ifg = torch.exp(1j * rand_ifg_tensor)
-
-    # Process in batches to avoid memory issues
-    batch_size = 1000  # Adjust based on your GPU memory
-    n_rand = rand_ifg_tensor.size(0)
-    coh_rand_tensor = torch.zeros(n_rand, dtype=torch.float64, device=device)
-
-    for batch_start in range(0, n_rand, batch_size):
-        batch_end = min(batch_start + batch_size, n_rand)
-        batch_exp_rand_ifg = exp_rand_ifg[batch_start:batch_end]
-        
-        # Expand bperp for batch processing
-        # Shape: [batch_size, n_ifg]
-        batch_bperp = bperp_tensor.expand(batch_end - batch_start, -1)
-        
-        # Process entire batch at once
-        _, _, coh_batch, _ = ps_topofit_torch(
-            batch_exp_rand_ifg,  # Shape: [batch_size, n_ifg]
-            batch_bperp,         # Shape: [batch_size, n_ifg]
-            n_trial_wraps,
-            'n'
-        )
-        
-        coh_rand_tensor[batch_start:batch_end] = coh_batch
-
-    return coh_rand_tensor.cpu().numpy()

@@ -1,21 +1,128 @@
-import numpy as np
-import os
+import numpy
 import h5py
+import os
 from datetime import datetime
 from .llh2local import llh2local
-from .utils import read_lines,get_par,read_h5,save_h5
+from .utils import read_lines, get_par, read_h5, save_h5
+from ..misc import get_module_info
+from ..logger import appLogger
+from numba import jit, prange, set_num_threads
 
-def step_1_ps_load_gamma(workdir:str, patch:str):
+
+# @jit(nopython=True, parallel=True)
+def _process_dates(date_strings, nb):
     """
-    Initial load of files into Python workspace.
+    Helper function to process dates (without numba, to avoid 
+    slicing issues on Unicode arrays).
+    Extracts year, month, day from each date string.
+    """
+    n = len(date_strings)
+    years = numpy.zeros(n, dtype=numpy.int32)
+    months = numpy.zeros(n, dtype=numpy.int32)
+    days = numpy.zeros(n, dtype=numpy.int32)
     
+    for i in range(n):
+        date_str = date_strings[i][nb-13:nb-5]
+        years[i] = int(date_str[:4])
+        months[i] = int(date_str[4:6])
+        days[i] = int(date_str[6:8])
+    
+    return years, months, days
+
+@jit(nopython=True, parallel=True)
+def compute_rg_look(ij, rgn, rps, se, re):
+    """
+    Compute slant range (rg) and look angle for each PS point in parallel.
+    """
+    n_ps = ij.shape[0]
+    rg = numpy.empty(n_ps, dtype=numpy.float64)
+    look = numpy.empty(n_ps, dtype=numpy.float64)
+    for i in prange(n_ps):
+        rg[i] = rgn + ij[i, 2] * rps
+        # Satellite look angles
+        look[i] = numpy.arccos((se**2 + rg[i]**2 - re**2) / (2.0 * se * rg[i]))
+    return rg, look
+
+@jit(nopython=True, parallel=True)
+def compute_inci(se, re, rg):
+    """
+    Compute incidence angle for each PS point in parallel.
+    """
+    n_ps = rg.shape[0]
+    inci = numpy.empty(n_ps, dtype=numpy.float64)
+    for i in prange(n_ps):
+        # incidence (gamma) angle calculation
+        inci[i] = numpy.arccos((se**2 - re**2 - rg[i]**2) / (2.0 * re * rg[i]))
+    return inci
+
+@jit(nopython=True, parallel=True)
+def compute_bperp_mat(ij, mean_az, prf, look, B_TCN_array, BR_TCN_array):
+    """
+    Compute perpendicular baseline for each PS point in parallel,
+    given B_TCN and BR_TCN arrays.
+    """
+    n_ps = ij.shape[0]
+    n_ifg = B_TCN_array.shape[0]
+    bperp_mat = numpy.empty((n_ps, n_ifg), dtype=numpy.float32)
+    
+    for i in prange(n_ifg):
+        bc = B_TCN_array[i, 1] + BR_TCN_array[i, 1]*(ij[:, 1] - mean_az)/prf
+        bn = B_TCN_array[i, 2] + BR_TCN_array[i, 2]*(ij[:, 1] - mean_az)/prf
+        bperp_mat[:, i] = bc*numpy.cos(look) - bn*numpy.sin(look)
+        
+    return bperp_mat
+
+@jit(nopython=True, parallel=True)
+def _fill_baseline_arrays(n_ifg, temp_B_array, temp_BR_array, B_TCN_array, BR_TCN_array):
+    """
+    Copy previously read float parameters into the final TCN arrays in parallel.
+    This part can be accelerated by Numba because it is just numeric copying.
+    """
+    for i in prange(n_ifg):
+        for j in range(3):
+            B_TCN_array[i, j] = temp_B_array[i, j]
+            BR_TCN_array[i, j] = temp_BR_array[i, j]
+    return B_TCN_array, BR_TCN_array
+
+
+def _read_all_baselines(ifgs, nb):
+    """
+    Read the baseline parameters from each .base file in a normal Python loop.
+    The main cost here is file I/O, so Numba won't help—this is purely Python I/O.
+    """
+    n_ifg = len(ifgs)
+    # Temporary arrays for storing float data before passing to the numba function.
+    temp_B_array = numpy.empty((n_ifg, 3), dtype=numpy.float32)
+    temp_BR_array = numpy.empty((n_ifg, 3), dtype=numpy.float32)
+
+    for i in range(n_ifg):
+        b_path = f"{ifgs[i][:nb-4]}base"  # e.g., "20200102base"
+        param_fields_ifg = get_par(b_path)
+        # Convert string parameters to float
+        baseline_TCN = [float(x) for x in param_fields_ifg["initial_baseline(TCN)"][:3]]
+        baseline_rate = [float(x) for x in param_fields_ifg["initial_baseline_rate"][:3]]
+        temp_B_array[i] = baseline_TCN
+        temp_BR_array[i] = baseline_rate
+
+    return temp_B_array, temp_BR_array
+
+
+def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
+    """
+    Initial load of files into Python workspace, with added parallelization via Numba.
+
     Parameters:
         workdir (str): Path to directory containing input / output files
-        endian (str): Endianness of binary files ('b' for big-endian, 'l' for little-endian)
+        patch (str): Patch identifier
+        num_threads (int): Number of threads to instruct Numba to use (default: 1).
     """
-    print("Running Step-01 ...\t[{}]".format(patch))
-    print('Initial load of files...')
-    patch_dir = os.path.join(workdir,patch)
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {} || {}".format(
+            get_module_info(),workdir, patch, num_threads)
+    )
+    # Configure Numba parallel threads:
+    set_num_threads(num_threads)
+
+    patch_dir = os.path.join(workdir, patch)
     
     # Files inside patch
     phpath = os.path.join(patch_dir, 'pscands_ph.h5')
@@ -38,15 +145,10 @@ def step_1_ps_load_gamma(workdir:str, patch:str):
     n_image = n_ifg
     
     # Convert dates to datetime objects
-    days = []
-    for ifg in ifgs:
-        date_str = ifg[nb-13:nb-5]
-        year = int(date_str[:4])
-        month = int(date_str[4:6])
-        day = int(date_str[6:8])
-        days.append(datetime(year, month, day))
+    date_strings = numpy.array([ifg for ifg in ifgs], dtype='<U100')  # ensure uniform dtype
+    years, months, days_arr = _process_dates(date_strings, nb)
+    days = [datetime(years[i], months[i], days_arr[i]) for i in range(len(years))]
     
-    #master_day_yyyymmdd = master_day
     year = master_day // 10000
     month = (master_day - year * 10000) // 100
     monthday = master_day - year * 10000 - month * 100
@@ -55,10 +157,10 @@ def step_1_ps_load_gamma(workdir:str, patch:str):
     # Find master index
     master_ix = sum(1 for d in days if d < master_date)
     if days[master_ix] != master_date:
-        master_master_flag = '0'  # no null master-master ifg provided
+        master_master_flag = '0'
         days.insert(master_ix, master_date)
     else:
-        master_master_flag = '1'  # yes, null master-master ifg provided
+        master_master_flag = '1'
     
     # Read heading
     param_fields = get_par(rslcpar)
@@ -77,168 +179,164 @@ def step_1_ps_load_gamma(workdir:str, patch:str):
     ij = read_h5(ijpath)["data"]
     n_ps = ij.shape[0]
     
-    # Calculate geometry
-    mean_az = naz/2 - 0.5  # mean azimuth line
-    rg = rgn + ij[:, 2] * rps
-    look = np.arccos((se**2 + rg**2 - re**2)/(2*se*rg))  # Satellite look angles
+    # Calculate geometry in parallel
+    mean_az = naz / 2 - 0.5
+    rg, look = compute_rg_look(ij, rgn, rps, se, re)
     
-    # Initialize baseline matrix
-    bperp_mat = np.zeros((n_ps, n_image), dtype=np.float32)
+    # 1) Read all baseline parameters at once (I/O bound)
+    temp_B_array, temp_BR_array = _read_all_baselines(ifgs, nb)
+
+    # 2) Allocate final arrays
+    n_ifg = len(ifgs)
+    B_TCN_array = numpy.zeros((n_ifg, 3), dtype=numpy.float32)
+    BR_TCN_array = numpy.zeros((n_ifg, 3), dtype=numpy.float32)
+
+    # 3) Use a Numba-accelerated function to fill those final arrays
+    _fill_baseline_arrays(n_ifg, temp_B_array, temp_BR_array, B_TCN_array, BR_TCN_array)
     
-    # Process baselines
-    for i in range(n_ifg):
-        param_fields = get_par(f"{ifgs[i][:nb-4]}base")
-        B_TCN  = [float(par) for par in param_fields["initial_baseline(TCN)"][:3]]
-        BR_TCN  = [float(par) for par in param_fields["initial_baseline_rate"][:3]]
-        
-        bc = B_TCN[1] + BR_TCN[1]*(ij[:, 1] - mean_az)/prf
-        bn = B_TCN[2] + BR_TCN[2]*(ij[:, 1] - mean_az)/prf
-        bperp_mat[:, i] = bc*np.cos(look) - bn*np.sin(look)
+    # Compute baselines in parallel
+    bperp_mat = compute_bperp_mat(ij, mean_az, prf, look, B_TCN_array, BR_TCN_array)
     
     # Calculate mean perpendicular baseline
-    bperp = np.mean(bperp_mat, axis=0)
+    bperp = numpy.mean(bperp_mat, axis=0)
     
     # Adjust baseline matrix based on master
     if master_master_flag == '1':
-        bperp_mat = np.delete(bperp_mat, master_ix, axis=1)
+        bperp_mat = numpy.delete(bperp_mat, master_ix, axis=1)
     else:
-        bperp = np.insert(bperp, master_ix, 0)
+        bperp = numpy.insert(bperp, master_ix, 0)
     
-    # Calculate incidence angles
-    inci = np.arccos((se**2 - re**2 - rg**2)/(2*re*rg))
-    mean_incidence = np.mean(inci)
+    # Calculate incidence angles in parallel
+    inci = compute_inci(se, re, rg)
+    mean_incidence = numpy.mean(inci)
     mean_range = rgc
     
     # Read phase data
     ph = read_h5(phpath)["data"]
-    # ph = np.zeros((n_ps, n_ifg), dtype=np.complex64)
-    # with open(phname, 'rb') as fid:
-    #     for i in range(n_ifg):
-    #         # Read all data for one interferogram at once
-    #         ph_bit = np.fromfile(fid, dtype=f'{endian_fmt}f', count=n_ps*2)
-    #         ph[:, i] = ph_bit[::2] + 1j*ph_bit[1::2]
-    
-    # Process zero phases
-    # zero_ph = np.sum(ph == 0, axis=1)
-    #nonzero_ix = zero_ph <= 1
-    
     if master_master_flag == '1':
         ph[:, master_ix] = 1
     else:
-        ph = np.insert(ph, master_ix, np.ones(n_ps), axis=1)
+        ph = numpy.insert(ph, master_ix, numpy.ones(n_ps), axis=1)
         n_ifg += 1
         n_image += 1
     
     # Read lon/lat data
     lonlat = read_h5(llpath)["data"]
-    #  if os.path.exists(llname):
-    #       lonlat = np.fromfile(llname, dtype=f'{endian_fmt}f').reshape(-1, 2).astype(np.float64)
-    #  else:
-    #       raise FileNotFoundError(f"{llname} does not exist")
     
     # Calculate center point
-    ll0 = (np.max(lonlat, axis=0) + np.min(lonlat, axis=0)) / 2
+    ll0 = (numpy.max(lonlat, axis=0) + numpy.min(lonlat, axis=0)) / 2
     
     # Convert to local coordinates
     xy = llh2local(lonlat.T, ll0).T * 1000
     
-    # # Sort coordinates and find corners
-    # sort_x = xy[xy[:, 0].argsort()]
-    # sort_y = xy[xy[:, 1].argsort()]
-    # n_pc = round(n_ps * 0.001)
-    # bl = np.mean(sort_x[:n_pc], axis=0)  # bottom left corner
-    # tr = np.mean(sort_x[-n_pc:], axis=0)  # top right corner
-    # br = np.mean(sort_y[:n_pc], axis=0)  # bottom right corner
-    # tl = np.mean(sort_y[-n_pc:], axis=0)  # top left corner
-    
     # Rotate coordinates
-    theta = (180 - heading) * np.pi / 180
-    if theta > np.pi:
-        theta -= 2 * np.pi
+    theta = (180 - heading) * numpy.pi / 180
+    if theta > numpy.pi:
+        theta -= 2 * numpy.pi
     
-    rotm = np.array([[np.cos(theta), np.sin(theta)],
-                     [-np.sin(theta), np.cos(theta)]])
+    rotm = numpy.array([
+        [numpy.cos(theta), numpy.sin(theta)],
+        [-numpy.sin(theta), numpy.cos(theta)]
+    ])
     
-    xy = xy.T  # Transpose to match MATLAB's operation
-    xynew = rotm @ xy  # rotate so that scene axes approx align with x=0 and y=0
+    xy_trans = xy.T
+    xynew = rotm @ xy_trans
     
-    # Check rotation improvement using MATLAB's logic
-    if (max(xynew[0]) - min(xynew[0]) < max(xy[0]) - min(xy[0]) and
-        max(xynew[1]) - min(xynew[1]) < max(xy[1]) - min(xy[1])):
-        xy = xynew  # check that rotation is an improvement
-        print(f'Rotating by {theta * 180/np.pi} degrees')
+    # Check rotation improvement
+    if ((numpy.max(xynew[0]) - numpy.min(xynew[0]) <
+         numpy.max(xy_trans[0]) - numpy.min(xy_trans[0])) and
+        (numpy.max(xynew[1]) - numpy.min(xynew[1]) <
+         numpy.max(xy_trans[1]) - numpy.min(xy_trans[1]))):
+        xy = xynew.T
+        print(f'Rotating by {theta * 180/numpy.pi} degrees')
+    else:
+        xy = xy_trans.T
     
-    xy = xy.T  # Transpose back
-    
-    # Convert to single precision and round to millimeters
-    xy = xy.astype(np.float32)
-    sort_ix = np.lexsort((xy[:, 0], xy[:, 1]))  # sort in ascending y order
+    # Convert to single precision and round
+    xy = xy.astype(numpy.float32)
+    sort_ix = numpy.lexsort((xy[:, 0], xy[:, 1]))
     xy = xy[sort_ix]
-    xy = np.round(xy * 1000) / 1000  # round to mm
+    xy = numpy.round(xy * 1000) / 1000
     
     # Add index column
-    xy = np.column_stack((np.arange(1, n_ps + 1), xy))
+    xy = numpy.column_stack((numpy.arange(1, n_ps + 1), xy))
     
-    # Sort other arrays
+    # Sort other arrays accordingly
     ph = ph[sort_ix]
     ij = ij[sort_ix]
-    ij[:, 0] = np.arange(1, n_ps + 1)
+    ij[:, 0] = numpy.arange(1, n_ps + 1)
     lonlat = lonlat[sort_ix]
     bperp_mat = bperp_mat[sort_ix]
     
-    # Remove NaN values if present in lonlat, phase
-    ix_nan = np.any(np.isnan(lonlat), axis=1) | np.any(np.isnan(ph), axis=1)
+    # Remove NaN values if present
+    ix_nan = numpy.any(numpy.isnan(lonlat), axis=1) | numpy.any(numpy.isnan(ph), axis=1)
     lonlat = lonlat[~ix_nan]
     ij = ij[~ix_nan]
     xy = xy[~ix_nan]
     n_ps = len(lonlat)
     
     # Update indices
-    ij[:, 0] = np.arange(1, n_ps + 1)
-    xy[:, 0] = np.arange(1, n_ps + 1)
+    ij[:, 0] = numpy.arange(1, n_ps + 1)
+    xy[:, 0] = numpy.arange(1, n_ps + 1)
 
     psver = 1
     with h5py.File(os.path.join(patch_dir, 'psver.h5'), 'w') as f:
         f.create_dataset('psver', data=psver)
     
-    # Save results with output directory
+    # Save results
     savename = f'ps{psver}.h5'
-    days_str = np.array([d.strftime('%Y-%m-%d %H:%M:%S') for d in days])
+    days_str = numpy.array([d.strftime('%Y-%m-%d %H:%M:%S') for d in days])
     days_str = days_str.astype('S')
-    master_date_str = np.array([master_date.strftime('%Y-%m-%d %H:%M:%S')])
+    master_date_str = numpy.array([master_date.strftime('%Y-%m-%d %H:%M:%S')])
     master_date_str = master_date_str.astype('S')
-    save_h5(patch_dir,savename,
-        **{"ij":ij, "lonlat":lonlat, "xy":xy, "bperp":bperp, "days_str":days_str, 
-         "master_date_str":master_date_str, "master_ix":master_ix,"n_ifg":n_ifg, 
-         "n_image":n_image, "n_ps":n_ps, "sort_ix":sort_ix, "ll0":ll0, 
-         "master_ix":master_ix, "mean_incidence":mean_incidence, "mean_range":mean_range})
+    
+    save_h5(
+        patch_dir, savename,
+        **{
+            "ij": ij,
+            "lonlat": lonlat,
+            "xy": xy,
+            "bperp": bperp,
+            "days_str": days_str,
+            "master_date_str": master_date_str,
+            "master_ix": master_ix,
+            "n_ifg": n_ifg,
+            "n_image": n_image,
+            "n_ps": n_ps,
+            "sort_ix": sort_ix,
+            "ll0": ll0,
+            "master_ix": master_ix,
+            "mean_incidence": mean_incidence,
+            "mean_range": mean_range
+        }
+    )
     
     # Save phase data
     phsavename = f'ph{psver}.h5'
     ph = ph[~ix_nan]
-    save_h5(patch_dir,phsavename, **{"ph":ph})
+    save_h5(patch_dir, phsavename, **{"ph": ph})
     
     # Save baseline data
     bpsavename = f'bp{psver}.h5'
     bperp_mat = bperp_mat[~ix_nan]
-    save_h5(patch_dir, bpsavename, **{"bperp_mat":bperp_mat})
+    save_h5(patch_dir, bpsavename, **{"bperp_mat": bperp_mat})
     
     # Save look angle data
     lasavename = f'la{psver}.h5'
-    la = inci[sort_ix]  # store incidence not look angle for gamma
+    la = inci[sort_ix]
     la = la[~ix_nan]
-    save_h5(patch_dir, lasavename, **{"la":la})
+    save_h5(patch_dir, lasavename, **{"la": la})
     
     # Save D_A if exists
     D_A = read_h5(dapath)["data"]
     D_A = D_A[sort_ix]
     D_A = D_A[~ix_nan]
     dasavename = f'da{psver}.h5'
-    save_h5(patch_dir, dasavename, **{"D_A":D_A})
+    save_h5(patch_dir, dasavename, **{"D_A": D_A})
     
     # Save height if exists
     hgt = read_h5(htpath)["data"]
     hgt = hgt[sort_ix]
     hgt = hgt[~ix_nan]
     hgtsavename = f'hgt{psver}.h5'
-    save_h5(patch_dir, hgtsavename, **{"hgt":hgt})
+    save_h5(patch_dir, hgtsavename, **{"hgt": hgt})

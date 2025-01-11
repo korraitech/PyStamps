@@ -5,58 +5,98 @@ def llh2local(llh, llh0):
     Convert lat/lon/height coordinates to local coordinates.
     
     Parameters:
-        llh: Array of [lon, lat, height] coordinates
-        llh0: Reference [lon, lat] point
+        llh: 2D array of shape (3, N), where rows are [lon, lat, height].
+        llh0: 1D array-like of shape (2,), reference [lon, lat] point.
     
     Returns:
-        xy: Local coordinates in kilometers
+        xy: 2D array of shape (2, N) of local coordinates in kilometers.
     """
-    # WGS84 ellipsoid constants
+    # ----------------------------------------------------------------
+    # Precompute constants for WGS84 ellipsoid and polynomial terms.
+    # ----------------------------------------------------------------
     a = 6378137.0  # semi-major axis
     e = 0.08209443794970  # eccentricity (matching MATLAB version)
-    
-    # Extract coordinates
-    lon = llh[0, :]
-    lat = llh[1, :]
-    
-    # Convert to radians
-    lon = np.radians(lon)
-    lat = np.radians(lat)
+
+    e2 = e**2
+    e4 = e2**2
+    e6 = e4 * e2
+
+    # Polynomial coefficients for the meridian distance expansion:
+    c0 = 1 - (e2 / 4.0) - (3.0 * e4 / 64.0) - (5.0 * e6 / 256.0)
+    c1 = (3.0 * e2 / 8.0) + (3.0 * e4 / 32.0) + (45.0 * e6 / 1024.0)
+    c2 = (15.0 * e4 / 256.0) + (45.0 * e6 / 1024.0)
+    c3 = (35.0 * e6 / 3072.0)
+
+    def meridian_dist(lat):
+        """
+        Polynomial approximation for meridian distance on the WGS84 ellipsoid.
+        """
+        return a * (
+            c0 * lat
+            - c1 * np.sin(2.0 * lat)
+            + c2 * np.sin(4.0 * lat)
+            - c3 * np.sin(6.0 * lat)
+        )
+
+    # ----------------------------------------------------------------
+    # Extract coordinates, convert to radians.
+    # ----------------------------------------------------------------
+    lon = np.radians(llh[0, :])
+    lat = np.radians(llh[1, :])
     lon0 = np.radians(llh0[0])
     lat0 = np.radians(llh0[1])
-    
-    # Initialize output array
-    xy = np.zeros((2, lon.shape[0]))
-    
-    # Handle non-zero latitudes
-    z = lat != 0
-    dlambda = lon[z] - lon0
-    
-    # Calculate meridian distance
-    def meridian_dist(lat, a, e):
-        return a * ((1-e**2/4-3*e**4/64-5*e**6/256)*lat - 
-                   (3*e**2/8+3*e**4/32+45*e**6/1024)*np.sin(2*lat) +
-                   (15*e**4/256 +45*e**6/1024)*np.sin(4*lat) -
-                   (35*e**6/3072)*np.sin(6*lat))
-    
-    M = meridian_dist(lat[z], a, e)
-    M0 = meridian_dist(lat0, a, e)
-    
-    # Calculate N and E
-    N = a / np.sqrt(1 - e**2 * np.sin(lat[z])**2)
-    E = dlambda * np.sin(lat[z])
-    
-    # Calculate local coordinates for non-zero latitudes
-    xy[0, z] = N * 1 / np.tan(lat[z]) * np.sin(E)
-    xy[1, z] = M - M0 + N * 1 / np.tan(lat[z]) * (1 - np.cos(E))
-    
-    # Handle zero latitudes
-    nz = ~z
-    dlambda = lon[nz] - lon0
-    xy[0, nz] = a * dlambda
-    xy[1, nz] = -M0
-    
-    # Convert to kilometers
-    xy = xy / 1000
-    
+
+    # ----------------------------------------------------------------
+    # Allocate output array.
+    # ----------------------------------------------------------------
+    xy = np.zeros((2, lon.size))
+
+    # ----------------------------------------------------------------
+    # Identify lat != 0 for the main formula.
+    # ----------------------------------------------------------------
+    z = (lat != 0)
+    nz = ~z  # lat == 0
+
+    # ----------------------------------------------------------------
+    # Meridian distances for offset computations, reference meridian distance.
+    # ----------------------------------------------------------------
+    M0 = meridian_dist(lat0)
+
+    # ----------------------------------------------------------------
+    # Handle points where lat != 0.
+    # ----------------------------------------------------------------
+    if np.any(z):
+        lat_z = lat[z]
+        dlambda_z = lon[z] - lon0
+
+        # Precompute trigs once:
+        sin_lat_z = np.sin(lat_z)
+        tan_lat_z = np.tan(lat_z)
+
+        # Meridian distances at lat != 0
+        M = meridian_dist(lat_z)
+
+        # Radius of curvature in the prime vertical:
+        N = a / np.sqrt(1.0 - e2 * sin_lat_z**2)
+
+        # E = dlambda * sin(lat)
+        E = dlambda_z * sin_lat_z
+
+        # x -> Easting
+        xy[0, z] = N * (1.0 / tan_lat_z) * np.sin(E)
+        # y -> Northing
+        xy[1, z] = (M - M0) + N * (1.0 / tan_lat_z) * (1.0 - np.cos(E))
+
+    # ----------------------------------------------------------------
+    # Handle points where lat == 0 (purely equatorial).
+    # ----------------------------------------------------------------
+    if np.any(nz):
+        dlambda_nz = lon[nz] - lon0
+        xy[0, nz] = a * dlambda_nz
+        xy[1, nz] = -M0
+
+    # ----------------------------------------------------------------
+    # Convert to kilometers and return.
+    # ----------------------------------------------------------------
+    xy /= 1000.0
     return xy
