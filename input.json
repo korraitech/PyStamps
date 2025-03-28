@@ -1,12 +1,12 @@
 {
     "Pstm": {
-        "ADT": 0.4,
-        "NRP": 2,
+        "ADT": 0.12,
+        "NRP": 1,
         "NAP": 2,
         "RPO": 50,
         "APO": 200
     },
     "Prdt": "20231107",
-    "Pinp": "/Users/rvs/myspace/workspace/services/service-utils/stamps-dev/snap-pystamps/data/export",
-    "Pout": "/Users/rvs/myspace/workspace/services/service-utils/stamps-dev/snap-pystamps/data/output"   
+    "Pinp": "/home/ubuntu/workspace/enhancement/enh_stamps/export_rslc_small/export",
+    "Pout": "/home/ubuntu/workspace/enhancement/enh_stamps/export_rslc_small/small_pystamps_patches_2"   
 }

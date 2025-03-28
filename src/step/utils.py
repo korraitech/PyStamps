@@ -22,14 +22,14 @@ def get_par(path:str) -> dict:
             field_data[line_data[0]] = line_data[1].split()
     return field_data
 
-def read_h5(filename) -> dict:
+def read_h5(filename:str) -> dict:
     """
     Load .h5 file using h5py.
     """ 
     with hp.File(filename, 'r') as f:
         return {k: np.array(v) for k, v in f.items()}
 
-def append_to_hdf5(save_path, save_dict):
+def append_to_hdf5(save_path:str, save_dict:dict):
     print('Appending to existing HDF5 file...')
     with hp.File(save_path, 'a') as f:
         for key, value in save_dict.items():

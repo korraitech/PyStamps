@@ -82,7 +82,7 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
             parms[key] = value.item()
 
     # update parms with kwargs
-    parms.update(rslc_par) 
+    parms.update(rslc_par)
 
     # Save parameters to JSON
     with open(os.path.join(workdir, parmfile), 'w') as f:

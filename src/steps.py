@@ -28,7 +28,7 @@ def patch_task(parmas:dict):
     step_2_ps_estm_gamma(workdir,patch,parms)
     step_3_ps_select(workdir,patch,parms)
     step_4_ps_weed(workdir,patch,parms)
-    step_5a_ps_correct_phase(workdir,patch,parms)
+    step_5a_ps_correct_phase(workdir,patch)
 
 def run_stamps_steps(workdir:str):
     patches = read_lines(os.path.join(workdir,"patch.list"))

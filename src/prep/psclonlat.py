@@ -60,7 +60,7 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
             raw_bin = f.read(data_size)
             # Interpret big-endian float32, then swap to native (little-endian)
             np_data = numpy.frombuffer(raw_bin, dtype=">f4").reshape(height, width)
-            np_data = np_data.byteswap().newbyteorder()
+            np_data = np_data.byteswap().view(np_data.dtype.newbyteorder())
 
             # Convert to torch tensor. 
             # For memory safety, you might keep these on CPU if too large for GPU:
