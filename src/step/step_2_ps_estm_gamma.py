@@ -1,24 +1,16 @@
 import numpy as np
-import torch
-import time
 import os
-from scipy.interpolate import interp1d
 from ..misc import get_module_info
 from ..logger import appLogger
 from .utils import read_h5,save_h5
-from .random_coh import random_coh
-from .ps_topofit_torch2 import ps_topofit_torch2
+from .ps_topofit import ps_topofit
 from .clap_filt import clap_filt
+from tqdm import tqdm
+from scipy import signal
 
 def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     """
-    Estimate coherence of PS candidates.
-
-    This version of ps_estm_gamma more closely follows the structure
-    and variable naming/order of the original MATLAB code ps_est_gamma_quick.m.
-    It extends the logic after computing Nr so that it includes patch-phase
-    calculation, topographic-error estimation, iterative (re-)weighting,
-    and final saving steps, analogous to the MATLAB script.  
+    Estimating gamma for candidate pixels
 
     Args:
         workdir:str - path to the working directory
@@ -33,7 +25,10 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # Constants
     rho = 830000  # mean range - only approximate
     n_rand = 300000  # number of simulated random-phase pixels
+    low_coh_thresh = 31  # equivalent to coherence = 0.31
+    coh_bins = np.arange(0.005, 1.0, 0.01)
 
+    # Get parameters and extract scalar values
     # Get parameters and extract scalar values
     grid_size = int(parms['filter_grid_size'])
     filter_weighting = parms['filter_weighting']
@@ -45,9 +40,6 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     wavelength = float(parms['lambda'])
     gamma_change_convergence = float(parms['gamma_change_convergence'])
     gamma_max_iterations = int(parms['gamma_max_iterations'])
-
-    # Threshold based on baseline flag for UrbanSAR
-    low_coh_thresh = 31  # equivalent to coherence = 0.31
 
     # Frequency setup for filtering
     freq0 = 1.0 / low_pass_wavelength
@@ -61,8 +53,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     low_pass = np.fft.fftshift(low_pass)
 
     # Load psver
-    psver_data = read_h5(os.path.join(patch_dir, 'psver.h5'))
-    psver = int(psver_data['psver'])
+    psver = int(read_h5(os.path.join(patch_dir, 'psver.h5'))['psver'])
 
     # Build filenames
     psname = f'ps{int(psver)}.h5'
@@ -72,17 +63,22 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     pmname = f'pm{int(psver)}.h5'
     daname = f'da{int(psver)}.h5'
 
-    # Load PS data
+    # Load PS and baseline perpendicular data
     ps_data = read_h5(os.path.join(patch_dir, psname))
-
-    # Load baseline perpendicular matrix and version
     bp_data = read_h5(os.path.join(patch_dir,bpname))
 
-    # Load or create D_A
-    D_A = read_h5(os.path.join(patch_dir,daname))['D_A']
+    if os.path.exists(os.path.join(patch_dir,daname)):
+        da=read_h5(os.path.join(patch_dir,daname))
+        D_A=da['D_A'];
+    else:
+        D_A=np.ones(ps_data['n_ps'],1);
 
-    # Load phase data
-    ph = read_h5(os.path.join(patch_dir,phname))['ph']
+
+    if os.path.exists(os.path.join(patch_dir,phname)):
+        phin=read_h5(os.path.join(patch_dir,phname))
+        ph=phin['ph']
+    else:
+        ph=ps_data['ph']
 
     # Exclude master image from ph and bperp
     master_ix = int(ps_data['master_ix'])
@@ -92,18 +88,21 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     n_ps = int(ps_data['n_ps'])
     xy = ps_data['xy']
 
-    # Ensure 'xy' has shape (n_ps, ...)
-    if xy.shape[0] != n_ps:
-        xy = xy.T
-
     # Normalize ph
     A = np.abs(ph).astype(np.float32)
     A[A == 0] = 1.0
     ph = ph / A
 
-    # Incidence angle
+    # ===============================================
+    # The code below needs to be made sensor specific
+    # ===============================================
+    # load look angle
     la_data = read_h5(os.path.join(patch_dir,laname))
     inc_mean = np.mean(la_data['la']) + 0.052
+    max_K = max_topo_err / (wavelength * rho * np.sin(inc_mean) / 4 / np.pi)
+    # ===============================================
+    # The code below needs to be made sensor specific
+    # ===============================================
 
     # Max K and approximate number of trial wraps
     bperp_range = float(np.max(bperp) - np.min(bperp))
@@ -111,263 +110,164 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     n_trial_wraps = bperp_range * max_K / (2.0 * np.pi)
     print(f'n_trial_wraps={n_trial_wraps}')
 
-    # Prepare for restarts
-    K_ps = None
-    C_ps = None
-    coh_ps = None
-    N_opt = None
-    ph_patch = None
-    ph_res = None
-
-    # Fresh start if needed
     print('Initialising random distribution...')
     np.random.seed(2005)
+    rand_ifg = (2.0 * np.pi * np.random.rand(n_ifg, n_rand)).T
+    coh_rand = np.zeros(n_rand, dtype=np.float32)
+    for i in tqdm(range(n_rand)):
+        K_r, C_r, coh_r, phase_residual = ps_topofit(np.exp(1j * rand_ifg[i, :]), bperp, n_trial_wraps)
+        coh_rand[i] = coh_r
 
-    # Generate random-phase distribution
-    rand_ifg = 2.0 * np.pi * np.random.rand(n_rand, n_ifg)
+    bin_width = 0.01
+    bin_edges = np.append(coh_bins - bin_width/2, coh_bins[-1] + bin_width/2)
+    Nr, _ = np.histogram(coh_rand, bins=bin_edges)
+    i = len(Nr) - 1
+    while Nr[i] == 0:
+        i = i - 1
+    Nr_max_nz_ix = i
 
-    # 2. PyTorch implementation
-    start_time_torch = time.time()
-    coh_rand_torch = random_coh(rand_ifg, bperp, n_trial_wraps)
-    torch_time = time.time() - start_time_torch
-    print(f'PyTorch implementation took {torch_time:.2f} seconds')
+    # Calculate grid indices
+    grid_ij = np.zeros((n_ps, 2), dtype=int)
+    grid_ij[:, 0] = np.ceil((xy[:, 2] - np.min(xy[:, 2]) + 1e-6) / grid_size)
+    grid_ij[grid_ij[:, 0] == np.max(grid_ij[:, 0]), 0] = np.max(grid_ij[:, 0]) - 1
 
-    # Use the PyTorch results for subsequent processing
-    coh_rand = coh_rand_torch
+    grid_ij[:, 1] = np.ceil((xy[:, 1] - np.min(xy[:, 1]) + 1e-6) / grid_size)
+    grid_ij[grid_ij[:, 1] == np.max(grid_ij[:, 1]), 1] = np.max(grid_ij[:, 1]) - 1
 
-    # Build histogram (matching MATLAB's behavior)
-    coh_bins = np.arange(0.005, 0.996, 0.01)
-    bin_edges = np.arange(0, 1.001, 0.01)
-    Nr, _ = np.histogram(coh_rand, bins=bin_edges, density=False)
-
-    # Find last non-zero index more efficiently
-    Nr_max_nz_ix = len(Nr) - 1 - np.argmax(Nr[::-1] != 0)
-
-    # Initialize arrays
-    step_number = 1
-    n_ps_int = int(ps_data['n_ps'])
-    K_ps = np.zeros(n_ps_int, dtype=np.float64)
-    C_ps = np.zeros(n_ps_int, dtype=np.float64)
-    coh_ps = np.zeros(n_ps_int, dtype=np.float64)
-    N_opt = np.zeros(n_ps_int, dtype=np.float64)
-
-    # ph_patch and ph_res should have shape (n_ps_int, n_ifg)
-    ph_res = np.zeros((n_ps_int, n_ifg), dtype=np.float32)
-    ph_patch = np.zeros((n_ps_int, n_ifg), dtype=np.complex64)
-
-    if xy.shape[1] >= 3:
-        y_vals = xy[:, 2]
-        x_vals = xy[:, 1]
-    else:
-        y_vals = xy[:, 1]
-        x_vals = xy[:, 0]
-
-    grid_ij = np.zeros((n_ps_int, 2), dtype=int)
-    grid_ij[:, 0] = np.ceil((y_vals - np.min(y_vals) + 1.0e-6) / grid_size).astype(int)
-    grid_ij[:, 1] = np.ceil((x_vals - np.min(x_vals) + 1.0e-6) / grid_size).astype(int)
-
-    # Match MATLAB boundary tweak
-    max_i = np.max(grid_ij[:, 0])
-    max_j = np.max(grid_ij[:, 1])
-    mask_i = (grid_ij[:, 0] == max_i)
-    mask_j = (grid_ij[:, 1] == max_j)
-    if max_i > 0:
-        grid_ij[mask_i, 0] = max_i - 1
-    if max_j > 0:
-        grid_ij[mask_j, 1] = max_j - 1
-
+    # Initialize loop counter and weighting
     i_loop = 1
-    weighting = 1.0 / D_A.ravel()
+    weighting = 1. /  D_A # Element-wise division
 
-    # Ensure arrays are allocated if partial or no restart
-    n_ps_int = int(n_ps_int)
+    # Assuming grid_ij is a NumPy array with at least two columns
+    n_i = np.max(grid_ij[:, 0])
+    n_j = np.max(grid_ij[:, 1])
 
-    # Number of grid cells
-    n_i = np.max(grid_ij[:, 0]) 
-    n_j = np.max(grid_ij[:, 1]) 
+    print(f'{n_ps} PS candidates to process')
 
-    print(f'{n_ps_int} PS candidates to process')
-    loop_end_sw = 0
-    step_number = 1
+    # Assumption that already sorted in ascending order of column 3 (y-axis)
+    xy = np.zeros((n_ps, 1))
+    xy[:, 0] = np.arange(1, n_ps + 1)
+
+    K_ps = np.zeros((n_ps, 1))
+    C_ps = np.zeros((n_ps, 1))
+    coh_ps = np.zeros((n_ps, 1))
+    N_opt = np.zeros((n_ps, 1))
+    ph_res = np.zeros((n_ps, n_ifg), dtype=np.float32)
+    ph_patch = np.zeros(ph.shape, dtype=np.complex64)
+    coh_ps_save = np.zeros((n_ps, 1))
 
     # --------------------
     # Main iteration loop
     # --------------------
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    coh_ps_temp = np.zeros(n_ps_int, dtype=np.float64)
-    while loop_end_sw == 0:
-        print(f'iteration #{i_loop}')
+    step_number = 1
+    loop_end_sw = 0
+    i_loop = 1
+    gamma_change_save = 0
+
+    while loop_end_sw==0:
+        print(f'iteration ##### {i_loop}')
         print('Calculating patch phases...')
 
-        # Build ph_grid & ph_filt: shape (n_i, n_j, n_ifg)
         ph_grid = np.zeros((n_i, n_j, n_ifg), dtype=np.complex64)
-        ph_filt = np.zeros((n_i, n_j, n_ifg), dtype=np.complex64)
+        ph_filt = np.copy(ph_grid)
+        K_ps_col = K_ps.reshape(-1, 1)
+        weighting_col = weighting.reshape(-1, 1)
+        ph_weight = ph * np.exp(-1j * bp_data["bperp_mat"] * K_ps_col) * weighting_col
 
-        # Reshape K_ps and weighting to (n_ps, 1) if they are 1D arrays
-        K_ps = K_ps.reshape((n_ps_int, 1)) if K_ps.ndim == 1 else K_ps
-        weighting = weighting.reshape((n_ps_int, 1)) if weighting.ndim == 1 else weighting
+        for i in range(n_ps):
+            row = grid_ij[i, 0] - 1
+            col = grid_ij[i, 1] - 1
+            ph_grid[row, col, :] += ph_weight[i, :]
 
-        # Vectorized ph_weight calculation
-        phase_factor = np.exp(-1j * bp_data['bperp_mat'] * K_ps)
-        ph_weight = ph * phase_factor * weighting
-
-        # Accumulate into ph_grid
-        for i_ps in range(n_ps_int):
-            gi, gj = grid_ij[i_ps] - 1
-            ph_grid[gi, gj, :] += ph_weight[i_ps, :]
-
-        # Filter each IFG slice
-        for i_ifg in range(n_ifg):
-            ph_filt[:, :, i_ifg] = clap_filt(
-                ph_grid[:, :, i_ifg],
-                clap_alpha,
-                clap_beta,
-                int(n_win * 0.75),
-                int(n_win * 0.25),
-                low_pass
-            )
-
-        # Extract patch value per PS
-        for i_ps in range(n_ps_int):
-            gi, gj = grid_ij[i_ps] - 1 # MATLAB to Python index
-            ph_patch[i_ps, :] = ph_filt[gi, gj, :]
-
-        # Normalize ph_patch
-        nz_idx = (np.abs(ph_patch) != 0)
-        ph_patch[nz_idx] = ph_patch[nz_idx] / np.abs(ph_patch[nz_idx])
-
-        print('Estimating topo error...')
-        step_number = 2
-    
-        # Prepare all psdph at once
-        psdph_all = ph * np.conj(ph_patch)
-        valid_ps = np.all(psdph_all != 0, axis=1)
+        for i in range(n_ifg):
+            ph_filt[:, :, i] = clap_filt(
+                ph_grid[:, :, i], 
+                clap_alpha, 
+                clap_beta, 
+                int(n_win * 0.75), 
+                int(n_win * 0.25), 
+                low_pass)
         
-        # Convert to PyTorch tensors
-        psdph_valid = torch.tensor(psdph_all[valid_ps], dtype=torch.complex64).to(device)
+        for i in range(n_ps):
+            row = grid_ij[i, 0] - 1
+            col = grid_ij[i, 1] - 1
+            ph_patch[i, :] = ph_filt[row, col, :]
         
-        # Handle bperp tensor creation
-        if bperp.ndim == 2 and bperp.shape[0] == n_ps_int:
-            bperp_valid = torch.tensor(bperp[valid_ps], dtype=torch.float64).to(device)
-        else:
-            bperp_valid = torch.tensor(bperp, dtype=torch.float64).expand(np.sum(valid_ps), -1).to(device)
-
-        # Process in batches
-        batch_size = 1000  # Adjust based on your GPU memory
-        n_valid = len(psdph_valid)
+        ix = ph_patch != 0
+        ph_patch[ix] = ph_patch[ix] / np.abs(ph_patch[ix])
         
-        K_ps_fast = np.full(n_ps_int, np.nan)
-        C_ps_fast = np.zeros(n_ps_int)
-        coh_ps_fast = np.zeros(n_ps_int)
-        N_opt_fast = np.zeros(n_ps_int)
-        ph_res_fast = np.zeros((n_ps_int, n_ifg), dtype=np.float32)
+        # #########################################################
+        # Estimating topo error
+        # #########################################################
 
-        for batch_start in range(0, n_valid, batch_size):
-            batch_end = min(batch_start + batch_size, n_valid)
-            batch_psdph = psdph_valid[batch_start:batch_end]
-            batch_bperp = bperp_valid[batch_start:batch_end]
-            
-            K_batch, C_batch, coh_batch, ph_res_batch = ps_topofit_torch2(
-                batch_psdph,
-                batch_bperp,
-                n_trial_wraps,
-            )
-            
-            # Get the original indices for this batch
-            valid_indices = np.where(valid_ps)[0][batch_start:batch_end]
-            
-            # Store results
-            K_ps_fast[valid_indices] = K_batch.cpu().numpy()
-            C_ps_fast[valid_indices] = C_batch.cpu().numpy()
-            coh_ps_fast[valid_indices] = coh_batch.cpu().numpy()
-            N_opt_fast[valid_indices] = 1
-            ph_res_fast[valid_indices] = np.angle(ph_res_batch.cpu().numpy())
-
-        # Use the results from the fast version
-        K_ps = K_ps_fast
-        C_ps = C_ps_fast
-        coh_ps = coh_ps_fast
-        N_opt = N_opt_fast
-        ph_res = ph_res_fast
-
-        # Return to step_number=1 after this block
-        step_number = 1
-        gamma_change_save = 0.0
-
-        # Check convergence
-        gamma_change_rms = np.sqrt(np.mean((coh_ps - coh_ps_temp) ** 2))
+        for i in range(n_ps):
+            psdph = ph[i,:] * np.conj(ph_patch[i,:])
+            if np.sum(psdph == 0) == 0:
+                # Assuming bp.bperp_mat is a 2D array
+                Kopt, Copt, cohopt, ph_residual = ps_topofit(psdph, bp_data["bperp_mat"][i,:].T, n_trial_wraps)
+                K_ps[i] = Kopt[0]
+                C_ps[i] = Copt
+                coh_ps[i] = cohopt
+                N_opt[i] = len(Kopt)
+                ph_res[i,:] = np.angle(ph_residual)
+            else:
+                K_ps[i] = np.nan
+                coh_ps[i] = 0
+            if (i + 1) % 100000 == 0:
+                print(f'{i+1} PS processed')
+        
+        gamma_change_rms = np.sqrt(np.sum((coh_ps - coh_ps_save) ** 2) / n_ps)
         gamma_change_change = gamma_change_rms - gamma_change_save
         print(f'gamma_change_change={gamma_change_change}')
         gamma_change_save = gamma_change_rms
-        coh_ps_temp = coh_ps.copy()
+        coh_ps_save = coh_ps
 
-        # Retrieve convergence parameters
-        gamma_change_convergence = float(parms['gamma_change_convergence'])
-        gamma_max_iterations = int(parms['gamma_max_iterations'])
+        # #########################################################
+        # End of topo error estimation
+        # #########################################################
 
-        # Convergence condition
-        if (abs(gamma_change_change) < gamma_change_convergence) or (i_loop >= gamma_max_iterations):
+        if abs(gamma_change_change) < gamma_change_convergence or i_loop >= gamma_max_iterations:
             loop_end_sw = 1
         else:
-            i_loop += 1
-            # Reweighting
-            if str(filter_weighting).lower().startswith('p-square'):
-                Na, _ = np.histogram(coh_ps, bins=bin_edges, density=False)
-                # Scale random distribution using low_coh_thresh
-                scale_num = np.sum(Na[:low_coh_thresh])
-                scale_den = np.sum(Nr[:low_coh_thresh])
-                Nr_scaled = Nr * (scale_num / scale_den)
+            i_loop = i_loop + 1
+            if filter_weighting.lower() == 'p-square':
+                bin_width = 0.01
+                bin_edges = np.append(coh_bins - bin_width/2, coh_bins[-1] + bin_width/2)
+                Na, _ = np.histogram(coh_ps, bins=bin_edges)
+                Nr = Nr * sum(Na[:low_coh_thresh]) / sum(Nr[:low_coh_thresh])  # scale random distribution
+                Na[Na == 0] = 1  # avoid divide by zero
 
-                Na_safe = Na.copy()
-                Na_safe[Na_safe == 0] = 1
-                Prand = Nr_scaled / Na_safe
+                Prand = Nr / Na
                 Prand[:low_coh_thresh] = 1
-                if Nr_max_nz_ix + 1 < len(Prand):
-                    Prand[Nr_max_nz_ix + 1 :] = 0
+                Prand[Nr_max_nz_ix+1:] = 0
                 Prand[Prand > 1] = 1
+                
+                window_len = 7
+                std_dev = (7 - 1) / (2 * 2.5) # std = 6 / 5 = 1.2
+                gauss_win = signal.windows.gaussian(7, std=std_dev, sym=True)
+                padded = np.concatenate([np.ones(window_len), Prand])
+                filtered = signal.lfilter(gauss_win, 1, padded)
+                Prand = filtered / np.sum(gauss_win)
+                Prand = Prand[window_len:]
 
-                # Quick smoothing like filter(gausswin(7),1,...) in MATLAB
-                gw = np.hanning(7)
-                gw = gw / np.sum(gw)
-                padded = np.concatenate((np.ones(7), Prand))
-                smoothed = np.convolve(padded, gw, mode='full')
-                smoothed = smoothed[6 : 6 + len(Prand)]  # like filter in MATLAB
-                Prand_smooth = smoothed
+                input_array = np.concatenate([[1], Prand])
+                x_orig = np.arange(len(input_array))
+                x_interp = np.linspace(0, len(input_array)-1, len(input_array)*10)
+                interpolated = np.interp(x_interp, x_orig, input_array)
+                Prand = interpolated[:-9]
 
-                # Upsample by ~10
-                x_old = np.arange(len(Prand_smooth))
-                x_new = np.linspace(0, len(Prand_smooth) - 1, 10 * len(Prand_smooth))
-                f_interp = interp1d(x_old, Prand_smooth, kind='linear')
-                Prand_interp = f_interp(x_new)
-                # Discard last 9 samples to mimic the MATLAB shape
-                if len(Prand_interp) > len(x_new) - 9:
-                    Prand_interp = Prand_interp[: (len(x_new) - 9)]
-
-                weighting_new = np.zeros(n_ps_int, dtype=np.float64)
-                for i_ps in range(n_ps_int):
-                    cc = coh_ps[i_ps]
-                    idx_lookup = int(round(cc * 1000))
-                    idx_lookup = max(0, min(idx_lookup, len(Prand_interp) - 1))
-                    val = Prand_interp[idx_lookup]
-                    weighting_new[i_ps] = (1.0 - val) ** 2
-
-                weighting = weighting_new
+                indices = np.round(coh_ps * 1000).astype(int) + 1
+                indices = np.clip(indices, 0, len(Prand) - 1)
+                Prand_ps = Prand[indices]
+                weighting = (1 - Prand_ps) ** 2
             else:
-                # Weighted by SNR approach
-                weighting_new = np.zeros(n_ps_int, dtype=np.float64)
-                for i_ps in range(n_ps_int):
-                    A_ps = A[i_ps, :]
-                    ph_res_ps = ph_res[i_ps, :]  # angles
-                    g_val = np.mean(A_ps * np.cos(ph_res_ps))
-                    sigma_val = np.sqrt(0.5 * (np.mean(A_ps ** 2) - g_val ** 2))
-                    if sigma_val != 0:
-                        weighting_new[i_ps] = g_val / sigma_val
-                    else:
-                        weighting_new[i_ps] = 0.0
-                weighting = weighting_new
-
-        # Save partial results in each iteration
-        save_h5(
+                g = np.mean(A * np.cos(ph_res), axis=1)
+                sigma_n = np.sqrt(0.5 * (np.mean(A**2, axis=1) - g**2))
+                weighting = np.zeros_like(sigma_n)
+                non_zero_mask = (sigma_n != 0)
+                weighting[non_zero_mask] = g[non_zero_mask] / sigma_n[non_zero_mask]  # snr
+    
+    save_h5(
             patch_dir,
             pmname,
             **{
@@ -385,7 +285,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
             'low_pass':low_pass,
             'i_loop':i_loop,
             'ph_weight':ph_weight,
-            'Nr':Nr_scaled, # wrong, comes int but is float on matlab
+            'Nr':Nr,
             'Nr_max_nz_ix':Nr_max_nz_ix,
             'coh_bins':coh_bins,
             'gamma_change_save':gamma_change_save

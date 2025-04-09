@@ -1,7 +1,6 @@
 import os
 import json
 import numpy
-from datetime import datetime
 from ..logger import appLogger
 from ..misc import get_module_info
 
@@ -9,7 +8,7 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
     appLogger.info(">>>>>>>>>>>>>>>> {}".format(get_module_info()))
 
     # Initialize parameters
-    parms = {'Created': datetime.now().strftime('%Y-%m-%d')}
+    parms = {}
     
     # Set default parameters if not already set
     parms.setdefault('insar_processor', 'snap')

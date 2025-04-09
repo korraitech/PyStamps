@@ -31,6 +31,8 @@ from .env import POOL_SIZE
 from .misc import get_module_info
 from multiprocessing import get_context
 
+SPEED_OF_LIGHT = 299792458
+
 def parse_field(path:str):
     field_data = {}
     with open(path) as fp:
@@ -76,14 +78,14 @@ def create_patch(workdir,length,width,prg,paz,overlap_rg,overlap_az):
         while iaz < paz:
             iaz += 1
             ip += 1
-            start_rg1 = width_p * (irg - 1) + 1
-            start_rg = 1  if start_rg1 - overlap_rg < 1 else start_rg1 - overlap_rg
-            end_rg1 = width_p * irg
-            end_rg = end_rg1 + overlap_rg if end_rg1 + overlap_rg <= width else width
-            start_az1 = length_p * (iaz - 1) + 1
-            start_az = 1 if start_az1 - overlap_az < 1 else start_az1 - overlap_az
-            end_az1 = length_p * iaz
-            end_az = end_az1 + overlap_az if end_az1 + overlap_az <= length else length
+            start_rg1 = width_p * (irg - 1)
+            start_rg = 0 if start_rg1 - overlap_rg < 0 else start_rg1 - overlap_rg
+            end_rg1 = width_p * irg - 1
+            end_rg = end_rg1 + overlap_rg if end_rg1 + overlap_rg < width else width - 1
+            start_az1 = length_p * (iaz - 1)
+            start_az = 0 if start_az1 - overlap_az < 0 else start_az1 - overlap_az
+            end_az1 = length_p * iaz - 1
+            end_az = end_az1 + overlap_az if end_az1 + overlap_az < length else length - 1
 
             patch_list.append(f"PATCH_{ip}")
             os.makedirs(os.path.join(workdir,f"PATCH_{ip}"),exist_ok=True)
@@ -155,14 +157,13 @@ def mt_prep(master:str,datadir:str,workdir:str,da_thresh:float=0.4,
         task_param.append({"workdir": workdir,"patch": patch})
     
     #task_cands(task_param[0])
-    # Use the 'spawn' start method instead of fork
     ctx = get_context('spawn')
     with ctx.Pool(processes=POOL_SIZE) as pool:
         pool.map(task_cands, task_param)
 
     rslc_par = {
         "heading" : float(rsc_data["heading"].replace('#','').replace('degrees','')),
-        "lambda" : 299792458/float(rsc_data["radar_frequency"].replace('#','').replace('Hz',''))
+        "lambda" : SPEED_OF_LIGHT/float(rsc_data["radar_frequency"].replace('#','').replace('Hz',''))
     }
     ps_parms_init(workdir=workdir, rslc_par=rslc_par)
     appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| End ".format(get_module_info())                                                                  )

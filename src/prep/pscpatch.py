@@ -1,6 +1,5 @@
 import numpy
 import h5py
-import torch
 import struct
 from ..logger import appLogger
 from ..misc import get_module_info
@@ -36,16 +35,14 @@ def process_patch_data_in_batches(
     amp_files: list[tuple[str, float]], 
     coords: tuple[int, int, int, int],
     width: int,
-    device: torch.device,
     batch_lines: int = 1024
 ) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
     """
-    Process patch data in batches on the GPU (to avoid OOM).
+    Process patch data in batches using numpy.
     Instead of returning per-file amplitudes, we only return:
       1. The sum of amplitudes at each pixel.
       2. The sum of squared amplitudes at each pixel.
       3. The minimum amplitude at each pixel (to replicate the check for any pixel <= threshold).
-    This requires much less memory on the GPU.
     """
 
     rg_start, rg_end, az_start, az_end = coords
@@ -67,7 +64,7 @@ def process_patch_data_in_batches(
                 f.seek(0)
 
             # Move file pointer to patch start
-            f.seek((az_start - 1) * width * 8 + (rg_start - 1) * 8)
+            f.seek((az_start) * width * 8 + (rg_start) * 8)
 
             lines_remaining = patch_lines
             start_line = 0
@@ -89,21 +86,15 @@ def process_patch_data_in_batches(
                 # Byte-swap if needed
                 data_batch = byteswap_complex(data_batch)
 
-                # Convert to torch and do amplitude
-                patch_batch_gpu = torch.from_numpy(data_batch).to(device)
-                # abs calculates magnitude of complex
-                # Then apply calibration
-                amplitude_gpu = torch.abs(patch_batch_gpu) / calib
-
-                # Bring results back to CPU
-                amplitude_cpu = amplitude_gpu.cpu().numpy()
+                # Calculate amplitude using numpy
+                amplitude = numpy.abs(data_batch) / calib
 
                 # Update accumulations
-                sum_amp_cpu[start_line:start_line + lines_to_read] += amplitude_cpu
-                sum_amp_sq_cpu[start_line:start_line + lines_to_read] += amplitude_cpu ** 2
+                sum_amp_cpu[start_line:start_line + lines_to_read] += amplitude
+                sum_amp_sq_cpu[start_line:start_line + lines_to_read] += amplitude ** 2
                 min_amp_cpu[start_line:start_line + lines_to_read] = numpy.minimum(
                     min_amp_cpu[start_line:start_line + lines_to_read],
-                    amplitude_cpu
+                    amplitude
                 )
 
                 # Advance
@@ -158,8 +149,8 @@ def find_ps_candidates_batched(
         ps_mask_flat = ps_mask.flatten()
         D_sq_flat = D_sq.flatten()
 
-        az_indices = numpy.arange(az_start - 1, az_start - 1 + patch_lines)
-        rg_indices = numpy.arange(rg_start - 1, rg_start - 1 + patch_width)
+        az_indices = numpy.arange(az_start, az_start + patch_lines)
+        rg_indices = numpy.arange(rg_start, rg_start + patch_width)
         az_grid, rg_grid = numpy.meshgrid(az_indices, rg_indices, indexing='ij')
         az_flat = az_grid.flatten()
         rg_flat = rg_grid.flatten()
@@ -173,12 +164,12 @@ def find_ps_candidates_batched(
             # check if min amplitude was below threshold => skip
             if min_amp_flat[idx] <= 0.00005:
                 continue
-            pscid += 1
             az_val = az_flat[idx]
             rg_val = rg_flat[idx]
             ij_data.append([pscid, az_val, rg_val])
             daout_data.append(numpy.sqrt(D_sq_flat[idx]))
-
+            pscid += 1
+            
         # Write out results
         ma_dataset = ma_hdf.create_dataset(
             'data', (patch_lines, patch_width),
@@ -210,19 +201,16 @@ def run_pscpatch(
     pscands_ma: str
 ) -> None:
     """
-    Run the PSC patch process with partial/batch GPU loading to reduce OOM risk.
+    Run the PSC patch process using only numpy.
     """
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "Start"))
-
-    # Detect GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     D_thresh, width, amp_files = read_parmfile(selpsc_in)
     coords = read_patch_coords(patch_in)
 
-    # Compute data in a streaming/batch fashion
+    # Compute data in a streaming/batch fashion using numpy
     min_amp, sum_amp, D_sq = process_patch_data_in_batches(
-        amp_files, coords, width, device
+        amp_files, coords, width
     )
 
     # Find PS candidates using the aggregated results

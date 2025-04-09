@@ -1,6 +1,5 @@
 import h5py
 import numpy
-import torch
 import struct
 import os
 from ..logger import appLogger
@@ -8,8 +7,8 @@ from ..misc import get_module_info
 
 def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll: str, batch_size: int = 100000):
     """
-    Optimized version of run_psclonlat using PyTorch and CUDA (if available), 
-    adding batch processing to accommodate large PSC lists when GPU memory is low.
+    Optimized version of run_psclonlat using NumPy with batch processing to 
+    accommodate large PSC lists when memory is limited.
 
     Args:
         patch_id: Identifier for the current patch.
@@ -21,8 +20,6 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
     
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "Start"))
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     # 1) Parse psclatlon_in to get width and .lonlat file names
     lonlat_files = []
     with open(psclatlon_in, "r") as parmfile:
@@ -30,10 +27,8 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
         lonlat_files.append(parmfile.readline().strip())
         lonlat_files.append(parmfile.readline().strip())
 
-    # 2) Pre-load each .lonlat file fully into a PyTorch tensor (CPU or GPU).
-    #    If the .lonlat files are very large, consider storing these on CPU instead 
-    #    and only moving partial data or performing CPU gather below.
-    ifg_tensors = []
+    # 2) Pre-load each .lonlat file fully into a NumPy array
+    ifg_arrays = []
     for lonlat_file_path in lonlat_files:
         file_size = os.path.getsize(lonlat_file_path)
         with open(lonlat_file_path, "rb") as f:
@@ -62,24 +57,23 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
             np_data = numpy.frombuffer(raw_bin, dtype=">f4").reshape(height, width)
             np_data = np_data.byteswap().view(np_data.dtype.newbyteorder())
 
-            # Convert to torch tensor. 
-            # For memory safety, you might keep these on CPU if too large for GPU:
-            ifg_tensors.append(torch.from_numpy(np_data).to(device))
+            # Store as NumPy array
+            ifg_arrays.append(np_data)
 
     # 3) Read the PSC candidates from pscands_ij (HDF5)
     #    We expect a dataset called 'data' with shape (N, 3): (index, y, x)
     with h5py.File(pscands_ij, "r") as ij_hdf:
         ij_data = numpy.array(ij_hdf["data"])  # shape = (N, 3)
 
-    # Separate row/col indices (move them to device if you plan on GPU gather)
-    y_coords = torch.from_numpy(ij_data[:, 1]).long().to(device)
-    x_coords = torch.from_numpy(ij_data[:, 2]).long().to(device)
+    # Extract row/col indices
+    y_coords = ij_data[:, 1].astype(numpy.int64)
+    x_coords = ij_data[:, 2].astype(numpy.int64)
 
     num_points = len(ij_data)
-    num_ifgs = len(ifg_tensors)
+    num_ifgs = len(ifg_arrays)
 
-    # 4) Create the output HDF5 dataset (on CPU) with space for all points/ifgs.
-    #    We'll fill it in batches to avoid huge GPU memory usage.
+    # 4) Create the output HDF5 dataset with space for all points/ifgs.
+    #    We'll fill it in batches to manage memory usage.
     with h5py.File(pscands_ll, "w") as ll_hdf:
         ll_dataset = ll_hdf.create_dataset(
             "data",
@@ -90,7 +84,6 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
         )
         
         # 5) Batch processing over PSC points.
-        #    We gather only a slice of PSC row/col coords at a time.
         for start_idx in range(0, num_points, batch_size):
             end_idx = min(start_idx + batch_size, num_points)
             batch_size_actual = end_idx - start_idx
@@ -99,16 +92,15 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
             batch_y = y_coords[start_idx:end_idx]
             batch_x = x_coords[start_idx:end_idx]
 
-            # We'll create a temporary array on the GPU or CPU
-            # to store the per-IFG results for this batch
-            batch_result = torch.empty((batch_size_actual, num_ifgs), dtype=torch.float32, device=device)
+            # Create batch result array
+            batch_result = numpy.empty((batch_size_actual, num_ifgs), dtype=numpy.float32)
 
-            # Gather for each ifg tensor
-            for ifg_index, ifg_tensor in enumerate(ifg_tensors):
-                batch_result[:, ifg_index] = ifg_tensor[batch_y, batch_x]
+            # Gather for each ifg array
+            for ifg_index, ifg_array in enumerate(ifg_arrays):
+                batch_result[:, ifg_index] = ifg_array[batch_y, batch_x]
 
-            # Move results back to CPU as float64 for writing
-            batch_np = batch_result.cpu().numpy().astype(numpy.float64)
+            # Convert to float64 for writing
+            batch_np = batch_result.astype(numpy.float64)
             ll_dataset[start_idx:end_idx, :] = batch_np
 
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "End"))

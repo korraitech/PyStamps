@@ -1,6 +1,5 @@
 import h5py
-import numpy
-import torch
+import array
 from ..logger import appLogger
 from ..misc import get_module_info
 
@@ -57,9 +56,14 @@ def run_pscdem(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ht: str
 
     # Read PSC candidate (row,col) data
     with h5py.File(pscands_ij, 'r') as ij_hdf:
-        ij_array = numpy.array(ij_hdf['data'])  # shape: (N, 3) => [id, y, x]
-    y_coords = ij_array[:, 1].astype(numpy.int64)
-    x_coords = ij_array[:, 2].astype(numpy.int64)
+        ij_array = ij_hdf['data'][:]  # Read all data into memory
+    
+    # Extract the y and x coordinates 
+    y_coords = []
+    x_coords = []
+    for i in range(len(ij_array)):
+        y_coords.append(int(ij_array[i][1]))
+        x_coords.append(int(ij_array[i][2]))
     num_candidates = len(y_coords)
 
     # Create the output HDF5 and dataset
@@ -73,21 +77,7 @@ def run_pscdem(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ht: str
             chunks=True
         )
 
-        # Device for PyTorch
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-        # We need to map each row index into chunks:
-        # For each chunk, we read chunk_height rows, figure out which PSCs are in that row range,
-        # flatten them, gather from that chunk, and write to keep the original ordering.
-
-        # We'll keep an array of final PSC height in CPU memory to write chunk by chunk.
-        # If memory is still too big, you could store partial results to disk, but
-        # typically the PSC array is much smaller than the entire image.
-        # For truly huge PSC arrays, you'd do a similar chunk approach for writing.
-
-        # This approach uses indexing back into ht_dset by PSC index in the original ordering
-        # so that we preserve the final shape and order in the "data" dataset.
-        
+        # We'll process chunks of the interferogram file
         current_row_start = 0
         while current_row_start < height:
             current_row_end = min(current_row_start + chunk_height, height)
@@ -101,27 +91,36 @@ def run_pscdem(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ht: str
             if not chunk_buffer:
                 break  # no more data to read
 
-            # Convert buffer to float32
-            chunk_numpy = numpy.frombuffer(chunk_buffer, dtype='>f4').astype('float32')
-            # Move to GPU if available
-            chunk_torch = torch.from_numpy(chunk_numpy).to(device)
+            # Convert buffer to float32 using array module
+            chunk_data = array.array('f')
+            chunk_data.frombytes(chunk_buffer)
+            # Convert big-endian to native byte order if needed
+            chunk_data.byteswap()  # IEEE 754 floats are big-endian in the file
 
-            # Indices of PSCs in this chunk
-            # (y in [current_row_start, current_row_end))
-            in_chunk_mask = (y_coords >= current_row_start) & (y_coords < current_row_end)
-            chunk_indices = numpy.where(in_chunk_mask)[0]  # PSC subset indices
-
-            if len(chunk_indices) > 0:
-                # local row = y - current_row_start
-                local_y = y_coords[chunk_indices] - current_row_start
-                local_x = x_coords[chunk_indices]
-                local_linidx = (local_y * width) + local_x
-                # Move to GPU, gather
-                local_linidx_torch = torch.from_numpy(local_linidx).to(device)
-                result_torch = chunk_torch[local_linidx_torch]
-                result_cpu = result_torch.cpu().numpy()
-                # Write back to HDF5 dataset at the correct PSC candidate positions
-                ht_dset[chunk_indices] = result_cpu
+            # Find indices of PSCs in this chunk
+            chunk_indices = []
+            local_positions = []
+            
+            for i in range(num_candidates):
+                if current_row_start <= y_coords[i] < current_row_end:
+                    chunk_indices.append(i)
+                    # Calculate local position in the chunk
+                    local_y = y_coords[i] - current_row_start
+                    local_x = x_coords[i]
+                    local_pos = (local_y * width) + local_x
+                    local_positions.append(local_pos)
+            
+            # Extract values for PSCs in this chunk
+            results = []
+            for pos in local_positions:
+                if 0 <= pos < len(chunk_data):
+                    results.append(chunk_data[pos])
+                else:
+                    results.append(0.0)  # Default value if position is out of bounds
+            
+            # Write back to HDF5 dataset at the correct PSC candidate positions
+            for idx, result_idx in enumerate(chunk_indices):
+                ht_dset[result_idx] = results[idx]
 
             current_row_start = current_row_end
 

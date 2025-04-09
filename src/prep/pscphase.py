@@ -1,16 +1,15 @@
 import h5py
 import numpy
 import struct
-import torch
 from ..logger import appLogger
 from ..misc import get_module_info
 
 def run_pscphase(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ph: str, batch_size: int = 10000):
     """
-    Optimized version of run_pscphase using PyTorch for vectorized data loading, 
-    but with batch processing to handle low-GPU or low-memory environments.
+    Optimized version of run_pscphase using NumPy for vectorized data loading, 
+    but with batch processing to handle low-memory environments.
 
-    Reads interferogram filenames, reads each file once into a float array on CPU,
+    Reads interferogram filenames, reads each file once into a float array,
     then processes a limited batch of indices at a time to avoid large memory usage.
     """
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "Start"))
@@ -37,10 +36,9 @@ def run_pscphase(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ph: s
             chunks=True,
         )
 
-        # Convert x_coords and y_coords into Torch tensors on CPU.
-        y_t = torch.from_numpy(y_coords.astype(numpy.int64))
-        x_t = torch.from_numpy(x_coords.astype(numpy.int64))
-        width_t = torch.tensor(width, dtype=torch.int64)
+        # Use NumPy arrays for coordinates
+        y_coords = y_coords.astype(numpy.int64)
+        x_coords = x_coords.astype(numpy.int64)
 
         # 4) Loop over each ifg_filename but process in batches to limit memory usage:
         for ifg_index, ifg_filename in enumerate(ifg_filenames):
@@ -59,30 +57,27 @@ def run_pscphase(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ph: s
             num_pixels = file_data.size // 2
             file_data = file_data.reshape(num_pixels, 2)
 
-            # Convert to a CPU-based Torch tensor
-            file_data_t = torch.from_numpy(file_data)
-
             # Pre-compute the absolute indices once for all points
-            # index_t = y*width + x
-            index_t = y_t * width_t + x_t
+            # index = y*width + x
+            index = y_coords * width + x_coords
 
             # 5) Process these extracted pixel arrays in manageable batches:
             start = 0
             while start < num_points:
                 end = min(start + batch_size, num_points)
-                sub_idx = index_t[start:end]
+                sub_idx = index[start:end]
 
-                # Gather from the main data (still on CPU). 
-                # This gather is partial, so it won't blow up memory on large data sets.
-                gathered = file_data_t[sub_idx]
+                # Gather from the main data using NumPy advanced indexing
+                gathered = file_data[sub_idx]
 
-                # Convert that to a complex64 array for writing.
+                # Convert to a complex64 array for writing
                 real_part = gathered[:, 0]
                 imag_part = gathered[:, 1]
-                temp_array = (real_part.numpy() + 1j * imag_part.numpy()).astype(numpy.complex64)
+                temp_array = (real_part + 1j * imag_part).astype(numpy.complex64)
 
                 # Write the extracted pixel array into the HDF5 dataset for this batch
                 ph_dataset[start:end, ifg_index] = temp_array
 
                 start = end
+
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "End"))

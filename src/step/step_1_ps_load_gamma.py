@@ -109,7 +109,7 @@ def _read_all_baselines(ifgs, nb):
 
 def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     """
-    Initial load of files into Python workspace, with added parallelization via Numba.
+    Initial load of files into HDF5 format in python workspace
 
     Parameters:
         workdir (str): Path to directory containing input / output files
@@ -276,8 +276,8 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     n_ps = len(lonlat)
     
     # Update indices
-    ij[:, 0] = numpy.arange(1, n_ps + 1)
-    xy[:, 0] = numpy.arange(1, n_ps + 1)
+    ij[:, 0] = numpy.arange(n_ps)
+    xy[:, 0] = numpy.arange(n_ps)
 
     psver = 1
     with h5py.File(os.path.join(patch_dir, 'psver.h5'), 'w') as f:
