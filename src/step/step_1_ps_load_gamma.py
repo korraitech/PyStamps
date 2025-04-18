@@ -6,106 +6,6 @@ from .llh2local import llh2local
 from .utils import read_lines, get_par, read_h5, save_h5
 from ..misc import get_module_info
 from ..logger import appLogger
-from numba import jit, prange, set_num_threads
-
-
-# @jit(nopython=True, parallel=True)
-def _process_dates(date_strings, nb):
-    """
-    Helper function to process dates (without numba, to avoid 
-    slicing issues on Unicode arrays).
-    Extracts year, month, day from each date string.
-    """
-    n = len(date_strings)
-    years = numpy.zeros(n, dtype=numpy.int32)
-    months = numpy.zeros(n, dtype=numpy.int32)
-    days = numpy.zeros(n, dtype=numpy.int32)
-    
-    for i in range(n):
-        date_str = date_strings[i][nb-13:nb-5]
-        years[i] = int(date_str[:4])
-        months[i] = int(date_str[4:6])
-        days[i] = int(date_str[6:8])
-    
-    return years, months, days
-
-@jit(nopython=True, parallel=True)
-def compute_rg_look(ij, rgn, rps, se, re):
-    """
-    Compute slant range (rg) and look angle for each PS point in parallel.
-    """
-    n_ps = ij.shape[0]
-    rg = numpy.empty(n_ps, dtype=numpy.float64)
-    look = numpy.empty(n_ps, dtype=numpy.float64)
-    for i in prange(n_ps):
-        rg[i] = rgn + ij[i, 2] * rps
-        # Satellite look angles
-        look[i] = numpy.arccos((se**2 + rg[i]**2 - re**2) / (2.0 * se * rg[i]))
-    return rg, look
-
-@jit(nopython=True, parallel=True)
-def compute_inci(se, re, rg):
-    """
-    Compute incidence angle for each PS point in parallel.
-    """
-    n_ps = rg.shape[0]
-    inci = numpy.empty(n_ps, dtype=numpy.float64)
-    for i in prange(n_ps):
-        # incidence (gamma) angle calculation
-        inci[i] = numpy.arccos((se**2 - re**2 - rg[i]**2) / (2.0 * re * rg[i]))
-    return inci
-
-@jit(nopython=True, parallel=True)
-def compute_bperp_mat(ij, mean_az, prf, look, B_TCN_array, BR_TCN_array):
-    """
-    Compute perpendicular baseline for each PS point in parallel,
-    given B_TCN and BR_TCN arrays.
-    """
-    n_ps = ij.shape[0]
-    n_ifg = B_TCN_array.shape[0]
-    bperp_mat = numpy.empty((n_ps, n_ifg), dtype=numpy.float32)
-    
-    for i in prange(n_ifg):
-        bc = B_TCN_array[i, 1] + BR_TCN_array[i, 1]*(ij[:, 1] - mean_az)/prf
-        bn = B_TCN_array[i, 2] + BR_TCN_array[i, 2]*(ij[:, 1] - mean_az)/prf
-        bperp_mat[:, i] = bc*numpy.cos(look) - bn*numpy.sin(look)
-        
-    return bperp_mat
-
-@jit(nopython=True, parallel=True)
-def _fill_baseline_arrays(n_ifg, temp_B_array, temp_BR_array, B_TCN_array, BR_TCN_array):
-    """
-    Copy previously read float parameters into the final TCN arrays in parallel.
-    This part can be accelerated by Numba because it is just numeric copying.
-    """
-    for i in prange(n_ifg):
-        for j in range(3):
-            B_TCN_array[i, j] = temp_B_array[i, j]
-            BR_TCN_array[i, j] = temp_BR_array[i, j]
-    return B_TCN_array, BR_TCN_array
-
-
-def _read_all_baselines(ifgs, nb):
-    """
-    Read the baseline parameters from each .base file in a normal Python loop.
-    The main cost here is file I/O, so Numba won't help—this is purely Python I/O.
-    """
-    n_ifg = len(ifgs)
-    # Temporary arrays for storing float data before passing to the numba function.
-    temp_B_array = numpy.empty((n_ifg, 3), dtype=numpy.float32)
-    temp_BR_array = numpy.empty((n_ifg, 3), dtype=numpy.float32)
-
-    for i in range(n_ifg):
-        b_path = f"{ifgs[i][:nb-4]}base"  # e.g., "20200102base"
-        param_fields_ifg = get_par(b_path)
-        # Convert string parameters to float
-        baseline_TCN = [float(x) for x in param_fields_ifg["initial_baseline(TCN)"][:3]]
-        baseline_rate = [float(x) for x in param_fields_ifg["initial_baseline_rate"][:3]]
-        temp_B_array[i] = baseline_TCN
-        temp_BR_array[i] = baseline_rate
-
-    return temp_B_array, temp_BR_array
-
 
 def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     """
@@ -119,8 +19,6 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {} || {}".format(
             get_module_info(),workdir, patch, num_threads)
     )
-    # Configure Numba parallel threads:
-    set_num_threads(num_threads)
 
     patch_dir = os.path.join(workdir, patch)
     
@@ -145,9 +43,12 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     n_image = n_ifg
     
     # Convert dates to datetime objects
-    date_strings = numpy.array([ifg for ifg in ifgs], dtype='<U100')  # ensure uniform dtype
-    years, months, days_arr = _process_dates(date_strings, nb)
-    days = [datetime(years[i], months[i], days_arr[i], tzinfo=timezone.utc) for i in range(len(years))]
+    date_strings = numpy.array([ifg for ifg in ifgs], dtype='<U100')
+    years = [int(s[nb - 13 : nb - 9]) for s in date_strings]
+    months = [int(s[nb - 9 : nb - 7]) for s in date_strings]
+    days = [int(s[nb - 7: nb - 5]) for s in date_strings]
+
+    days = [datetime(years[i], months[i], days[i], tzinfo=timezone.utc) for i in range(len(years))]
     
     year = master_day // 10000
     month = (master_day - year * 10000) // 100
@@ -179,35 +80,26 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     ij = read_h5(ijpath)["data"]
     n_ps = ij.shape[0]
     
-    # Calculate geometry in parallel
     mean_az = naz / 2 - 0.5
-    rg, look = compute_rg_look(ij, rgn, rps, se, re)
+    rg = rgn + ij[:, 2] * rps
+    look = numpy.arccos((se**2 + rg**2 - re**2) / (2 * se * rg))
     
-    # 1) Read all baseline parameters at once (I/O bound)
-    temp_B_array, temp_BR_array = _read_all_baselines(ifgs, nb)
+    bperp_mat = numpy.empty((n_ps, n_ifg), dtype=numpy.float64)
+    for i in range(n_ifg):
+        base_path = f"{ifgs[i][:nb-4]}base"
+        base_param = get_par(base_path)
+        bc=float(base_param["initial_baseline(TCN)"][1]) + float(base_param["initial_baseline_rate"][1])*(ij[:,1]-mean_az)/prf
+        bn=float(base_param["initial_baseline(TCN)"][2]) + float(base_param["initial_baseline_rate"][2])*(ij[:,1]-mean_az)/prf
+        bperp_mat[:,i]=bc*numpy.cos(look)-bn*numpy.sin(look)
 
-    # 2) Allocate final arrays
-    n_ifg = len(ifgs)
-    B_TCN_array = numpy.zeros((n_ifg, 3), dtype=numpy.float32)
-    BR_TCN_array = numpy.zeros((n_ifg, 3), dtype=numpy.float32)
-
-    # 3) Use a Numba-accelerated function to fill those final arrays
-    _fill_baseline_arrays(n_ifg, temp_B_array, temp_BR_array, B_TCN_array, BR_TCN_array)
-    
-    # Compute baselines in parallel
-    bperp_mat = compute_bperp_mat(ij, mean_az, prf, look, B_TCN_array, BR_TCN_array)
-    
-    # Calculate mean perpendicular baseline
     bperp = numpy.mean(bperp_mat, axis=0)
-    
-    # Adjust baseline matrix based on master
     if master_master_flag == '1':
         bperp_mat = numpy.delete(bperp_mat, master_ix, axis=1)
     else:
         bperp = numpy.insert(bperp, master_ix, 0)
     
     # Calculate incidence angles in parallel
-    inci = compute_inci(se, re, rg)
+    inci = numpy.arccos((se**2 - re**2 - rg**2) / (2 * re * rg))
     mean_incidence = numpy.mean(inci)
     mean_range = rgc
     
@@ -291,10 +183,10 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     save_h5(
         patch_dir, psname,
         **{
-            "ij": ij,                               # [check if index is correct]
+            "ij": ij,
             "lonlat": lonlat,
             "xy": xy,
-            "bperp": bperp,                         # [Floating point precision issue after 5 digit]
+            "bperp": bperp,
             "day": day,
             "master_day": master_day,
             "master_ix": master_ix,
@@ -314,7 +206,7 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     ph = ph[~ix_nan]
     save_h5(patch_dir, phname, **{"ph": ph})
     
-    # Save baseline data [Floating point precision issue after 5 digit]
+    # Save baseline data
     bpname = f'bp{psver}.h5'
     bperp_mat = bperp_mat[~ix_nan]
     save_h5(patch_dir, bpname, **{"bperp_mat": bperp_mat})
@@ -325,7 +217,7 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     la = la[~ix_nan]
     save_h5(patch_dir, laname, **{"la": la})
     
-    # Save D_A if exists [Floating point precision issue after 5 digit]
+    # Save D_A if exists
     D_A = read_h5(dapath)["data"]
     D_A = D_A[sort_ix]
     D_A = D_A[~ix_nan]
