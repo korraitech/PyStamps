@@ -1,7 +1,7 @@
 import numpy
 import h5py
 import os
-from datetime import datetime
+from datetime import datetime,timezone
 from .llh2local import llh2local
 from .utils import read_lines, get_par, read_h5, save_h5
 from ..misc import get_module_info
@@ -147,12 +147,12 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     # Convert dates to datetime objects
     date_strings = numpy.array([ifg for ifg in ifgs], dtype='<U100')  # ensure uniform dtype
     years, months, days_arr = _process_dates(date_strings, nb)
-    days = [datetime(years[i], months[i], days_arr[i]) for i in range(len(years))]
+    days = [datetime(years[i], months[i], days_arr[i], tzinfo=timezone.utc) for i in range(len(years))]
     
     year = master_day // 10000
     month = (master_day - year * 10000) // 100
     monthday = master_day - year * 10000 - month * 100
-    master_date = datetime(year, month, monthday)
+    master_date = datetime(year, month, monthday, tzinfo=timezone.utc)
     
     # Find master index
     master_ix = sum(1 for d in days if d < master_date)
@@ -284,21 +284,19 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
         f.create_dataset('psver', data=psver)
     
     # Save results
-    savename = f'ps{psver}.h5'
-    days_str = numpy.array([d.strftime('%Y-%m-%d %H:%M:%S') for d in days])
-    days_str = days_str.astype('S')
-    master_date_str = numpy.array([master_date.strftime('%Y-%m-%d %H:%M:%S')])
-    master_date_str = master_date_str.astype('S')
+    psname = f'ps{psver}.h5'
+    day = numpy.array([int(d.timestamp()/86400) for d in days])
+    master_day = numpy.array([int(master_date.timestamp()/86400)])
     
     save_h5(
-        patch_dir, savename,
+        patch_dir, psname,
         **{
-            "ij": ij,
+            "ij": ij,                               # [check if index is correct]
             "lonlat": lonlat,
             "xy": xy,
-            "bperp": bperp,
-            "days_str": days_str,
-            "master_date_str": master_date_str,
+            "bperp": bperp,                         # [Floating point precision issue after 5 digit]
+            "day": day,
+            "master_day": master_day,
             "master_ix": master_ix,
             "n_ifg": n_ifg,
             "n_image": n_image,
@@ -312,31 +310,31 @@ def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
     )
     
     # Save phase data
-    phsavename = f'ph{psver}.h5'
+    phname = f'ph{psver}.h5'
     ph = ph[~ix_nan]
-    save_h5(patch_dir, phsavename, **{"ph": ph})
+    save_h5(patch_dir, phname, **{"ph": ph})
     
-    # Save baseline data
-    bpsavename = f'bp{psver}.h5'
+    # Save baseline data [Floating point precision issue after 5 digit]
+    bpname = f'bp{psver}.h5'
     bperp_mat = bperp_mat[~ix_nan]
-    save_h5(patch_dir, bpsavename, **{"bperp_mat": bperp_mat})
+    save_h5(patch_dir, bpname, **{"bperp_mat": bperp_mat})
     
     # Save look angle data
-    lasavename = f'la{psver}.h5'
+    laname = f'la{psver}.h5'
     la = inci[sort_ix]
     la = la[~ix_nan]
-    save_h5(patch_dir, lasavename, **{"la": la})
+    save_h5(patch_dir, laname, **{"la": la})
     
-    # Save D_A if exists
+    # Save D_A if exists [Floating point precision issue after 5 digit]
     D_A = read_h5(dapath)["data"]
     D_A = D_A[sort_ix]
     D_A = D_A[~ix_nan]
-    dasavename = f'da{psver}.h5'
-    save_h5(patch_dir, dasavename, **{"D_A": D_A})
+    daname = f'da{psver}.h5'
+    save_h5(patch_dir, daname, **{"D_A": D_A})
     
     # Save height if exists
     hgt = read_h5(htpath)["data"]
     hgt = hgt[sort_ix]
     hgt = hgt[~ix_nan]
-    hgtsavename = f'hgt{psver}.h5'
-    save_h5(patch_dir, hgtsavename, **{"hgt": hgt})
+    hgtname = f'hgt{psver}.h5'
+    save_h5(patch_dir, hgtname, **{"hgt": hgt})

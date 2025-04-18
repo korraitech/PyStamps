@@ -29,7 +29,6 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     coh_bins = np.arange(0.005, 1.0, 0.01)
 
     # Get parameters and extract scalar values
-    # Get parameters and extract scalar values
     grid_size = int(parms['filter_grid_size'])
     filter_weighting = parms['filter_weighting']
     n_win = int(parms['clap_win'])
@@ -128,10 +127,10 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
 
     # Calculate grid indices
     grid_ij = np.zeros((n_ps, 2), dtype=int)
-    grid_ij[:, 0] = np.ceil((xy[:, 2] - np.min(xy[:, 2]) + 1e-6) / grid_size)
+    grid_ij[:, 0] = np.floor((xy[:, 2] - np.min(xy[:, 2]) + 1e-6) / grid_size)
     grid_ij[grid_ij[:, 0] == np.max(grid_ij[:, 0]), 0] = np.max(grid_ij[:, 0]) - 1
 
-    grid_ij[:, 1] = np.ceil((xy[:, 1] - np.min(xy[:, 1]) + 1e-6) / grid_size)
+    grid_ij[:, 1] = np.floor((xy[:, 1] - np.min(xy[:, 1]) + 1e-6) / grid_size)
     grid_ij[grid_ij[:, 1] == np.max(grid_ij[:, 1]), 1] = np.max(grid_ij[:, 1]) - 1
 
     # Initialize loop counter and weighting
@@ -139,8 +138,8 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     weighting = 1. /  D_A # Element-wise division
 
     # Assuming grid_ij is a NumPy array with at least two columns
-    n_i = np.max(grid_ij[:, 0])
-    n_j = np.max(grid_ij[:, 1])
+    n_i = np.max(grid_ij[:, 0]) + 1
+    n_j = np.max(grid_ij[:, 1]) + 1
 
     print(f'{n_ps} PS candidates to process')
 
@@ -175,8 +174,8 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
         ph_weight = ph * np.exp(-1j * bp_data["bperp_mat"] * K_ps_col) * weighting_col
 
         for i in range(n_ps):
-            row = grid_ij[i, 0] - 1
-            col = grid_ij[i, 1] - 1
+            row = grid_ij[i, 0]
+            col = grid_ij[i, 1]
             ph_grid[row, col, :] += ph_weight[i, :]
 
         for i in range(n_ifg):
@@ -189,8 +188,8 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
                 low_pass)
         
         for i in range(n_ps):
-            row = grid_ij[i, 0] - 1
-            col = grid_ij[i, 1] - 1
+            row = grid_ij[i, 0]
+            col = grid_ij[i, 1]
             ph_patch[i, :] = ph_filt[row, col, :]
         
         ix = ph_patch != 0

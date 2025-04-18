@@ -65,7 +65,7 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
     parms.setdefault('merge_resample_size', 0)
     parms.setdefault('merge_standard_dev', numpy.inf)
     parms.setdefault('scla_method', 'L2')
-    parms.setdefault('scla_deramp', 'n')
+    parms.setdefault('scla_deramp', 'y')
     parms.setdefault('lambda', numpy.nan)
     parms.setdefault('heading', numpy.nan)
     parms.setdefault('sb_scla_drop_index', [])

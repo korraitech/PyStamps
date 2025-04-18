@@ -4,8 +4,8 @@ from .env import POOL_SIZE
 from .step.utils import read_lines
 from .step.step_1_ps_load_gamma import step_1_ps_load_gamma
 from .step.step_2_ps_estm_gamma import step_2_ps_estm_gamma
-# from .step.step_3_ps_select import step_3_ps_select
-# from .step.step_4_ps_weed import step_4_ps_weed
+from .step.step_3_ps_select import step_3_ps_select
+from .step.step_4_ps_weed import step_4_ps_weed
 # from .step.step_5a_ps_correct_phase import step_5a_ps_correct_phase
 # from .step.step_5b_ps_merge_patches import step_5b_ps_merge_patches
 # from .step.step_aps_linear import step_aps_linear
@@ -26,8 +26,8 @@ def patch_task(parmas:dict):
     workdir = parmas["workdir"]
     step_1_ps_load_gamma(workdir,patch)
     step_2_ps_estm_gamma(workdir,patch,parms)
-    # step_3_ps_select(workdir,patch,parms)
-    # step_4_ps_weed(workdir,patch,parms)
+    step_3_ps_select(workdir,patch,parms)
+    step_4_ps_weed(workdir,patch,parms)
     # step_5a_ps_correct_phase(workdir,patch)
 
 def run_stamps_steps(workdir:str):
