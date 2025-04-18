@@ -133,10 +133,6 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     grid_ij[:, 1] = np.floor((xy[:, 1] - np.min(xy[:, 1]) + 1e-6) / grid_size)
     grid_ij[grid_ij[:, 1] == np.max(grid_ij[:, 1]), 1] = np.max(grid_ij[:, 1]) - 1
 
-    # Initialize loop counter and weighting
-    i_loop = 1
-    weighting = 1. /  D_A # Element-wise division
-
     # Assuming grid_ij is a NumPy array with at least two columns
     n_i = np.max(grid_ij[:, 0]) + 1
     n_j = np.max(grid_ij[:, 1]) + 1
@@ -158,6 +154,7 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
     # --------------------
     # Main iteration loop
     # --------------------
+    weighting = 1. /  D_A
     step_number = 1
     loop_end_sw = 0
     i_loop = 1
@@ -266,27 +263,27 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
                 non_zero_mask = (sigma_n != 0)
                 weighting[non_zero_mask] = g[non_zero_mask] / sigma_n[non_zero_mask]  # snr
     
-    save_h5(
-            patch_dir,
-            pmname,
-            **{
-            'ph_patch':ph_patch,
-            'K_ps':K_ps,
-            'C_ps':C_ps,
-            'coh_ps':coh_ps,
-            'N_opt':N_opt, 
-            'ph_res':ph_res, 
-            'step_number':step_number,
-            'ph_grid':ph_grid,
-            'n_trial_wraps':n_trial_wraps,
-            'grid_ij':grid_ij,
-            'grid_size':grid_size,
-            'low_pass':low_pass,
-            'i_loop':i_loop,
-            'ph_weight':ph_weight,
-            'Nr':Nr,
-            'Nr_max_nz_ix':Nr_max_nz_ix,
-            'coh_bins':coh_bins,
-            'gamma_change_save':gamma_change_save
-            }
-        )
+        save_h5(
+                patch_dir,
+                pmname,
+                **{
+                'ph_patch':ph_patch,
+                'K_ps':K_ps,
+                'C_ps':C_ps,
+                'coh_ps':coh_ps,
+                'N_opt':N_opt,
+                'ph_res':ph_res, 
+                'step_number':step_number,
+                'ph_grid':ph_grid,
+                'n_trial_wraps':n_trial_wraps,
+                'grid_ij':grid_ij,
+                'grid_size':grid_size,
+                'low_pass':low_pass,
+                'i_loop':i_loop,
+                'ph_weight':ph_weight,
+                'Nr':Nr,
+                'Nr_max_nz_ix':Nr_max_nz_ix,
+                'coh_bins':coh_bins,
+                'gamma_change_save':gamma_change_save
+                }
+            )
