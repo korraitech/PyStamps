@@ -240,7 +240,6 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
             ix_j = ix_j[(ix_j >= 0) & (ix_j < ph_bit.shape[1])]
             ph_bit[np.ix_(ix_i, ix_j)] = 0
 
-            ph_filt = np.zeros_like(ph_bit)
             for i_ifg in range(n_ifg):
                 ph_filt[:, :, i_ifg] = clap_filt_patch(ph_bit[:, :, i_ifg], clap_alpha, clap_beta, pm['low_pass'])
             ph_patch2[i, :] = ph_filt[ps_bit_i, ps_bit_j, :]
@@ -277,7 +276,7 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
 
     bperp_range = max(bperp) - min(bperp)
     keep_ix = (coh_ps2 > coh_thresh) & (abs(pm["K_ps"][ix].flatten() - K_ps2) < 2*np.pi/bperp_range)
-
+    print(f"{len(keep_ix)} ps selected after re-estimation of coherence")
     if np.sum(keep_ix) == 0:
         print("***No PS points left. Updating the stamps log for this****")
     

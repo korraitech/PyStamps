@@ -4,12 +4,6 @@ import struct
 from ..logger import appLogger
 from ..misc import get_module_info
 
-def byteswap_complex(data: numpy.ndarray) -> numpy.ndarray:
-    """
-    Swap bytes for complex float data (Numpy-based).
-    """
-    return numpy.array(data.byteswap())
-
 def read_parmfile(filename: str) -> tuple[float, int, list[tuple[str, float]]]:
     """
     Read parameter file and return threshold, width and calibration factors.
@@ -84,7 +78,7 @@ def process_patch_data_in_batches(
                     f.seek((width - patch_width) * 8, 1)
 
                 # Byte-swap if needed
-                data_batch = byteswap_complex(data_batch)
+                data_batch = numpy.array(data_batch.byteswap())
 
                 # Calculate amplitude using numpy
                 amplitude = numpy.abs(data_batch) / calib

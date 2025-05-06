@@ -7,6 +7,6 @@
         "APO": 200
     },
     "Prdt": "20231107",
-    "Pinp": "/home/ubuntu/workspace/enhancement/enh_stamps/export_rslc_small/export",
-    "Pout": "/home/ubuntu/workspace/enhancement/enh_stamps/export_rslc_small/small_pystamps"   
+    "Pinp": "/home/ubuntu/workspace/poc/enh_stamps/export_rslc_small/export",
+    "Pout": "/home/ubuntu/workspace/poc/enh_stamps/export_rslc_small/small_pystamps"   
 }

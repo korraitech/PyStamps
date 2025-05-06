@@ -246,11 +246,13 @@ def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
                 Prand = filtered / np.sum(gauss_win)
                 Prand = Prand[window_len:]
 
-                input_array = np.concatenate([[1], Prand])
-                x_orig = np.arange(len(input_array))
-                x_interp = np.linspace(0, len(input_array)-1, len(input_array)*10)
-                interpolated = np.interp(x_interp, x_orig, input_array)
-                Prand = interpolated[:-9]
+                R = 10
+                fp = np.concatenate(([1.0], Prand))
+                N = len(fp)
+                xp = np.arange(N, dtype=np.float64)
+                num_points = (N - 1) * R + 1
+                x = np.linspace(xp[0], xp[-1],num=num_points)
+                Prand = np.interp(x, xp, fp)
 
                 indices = np.round(coh_ps * 1000).astype(int) + 1
                 indices = np.clip(indices, 0, len(Prand) - 1)

@@ -9,27 +9,6 @@ def load_file_paths(file_path: str) -> list[str]:
     with open(file_path, 'r') as file:
         return [line.strip() for line in file]
 
-def swap_bytes_for_complex(data: numpy.ndarray) -> numpy.ndarray:
-    """
-    Swap bytes for complex float data.
-    """
-    # Create a view of the data as uint8 and reshape it to access individual bytes
-    data_bytes = data.view(dtype=numpy.uint8).reshape(-1, 8)
-    
-    # Create a new array with swapped bytes for each complex number
-    swapped_bytes = numpy.empty_like(data_bytes)
-    swapped_bytes[:, 0] = data_bytes[:, 3]
-    swapped_bytes[:, 1] = data_bytes[:, 2]
-    swapped_bytes[:, 2] = data_bytes[:, 1]
-    swapped_bytes[:, 3] = data_bytes[:, 0]
-    swapped_bytes[:, 4] = data_bytes[:, 7]
-    swapped_bytes[:, 5] = data_bytes[:, 6]
-    swapped_bytes[:, 6] = data_bytes[:, 5]
-    swapped_bytes[:, 7] = data_bytes[:, 4]
-    
-    # View the swapped bytes as complex numbers
-    return swapped_bytes.view(dtype=numpy.complex64).reshape(data.shape)
-
 def calculate_amplitude_calibration_chunked(file_path: str, chunk_size: int = 1_000_000) -> float:
     """
     Compute the amplitude calibration factor for a single SLC file by reading it in chunks.
@@ -49,7 +28,7 @@ def calculate_amplitude_calibration_chunked(file_path: str, chunk_size: int = 1_
                 break
 
             # Swap (reverse) bytes if needed
-            data = swap_bytes_for_complex(chunk)
+            data = numpy.array(chunk.byteswap())
 
             # Compute amplitudes
             amplitudes = numpy.abs(data)
