@@ -194,7 +194,7 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     del pm['ph_res']
     del pm['ph_patch']
     ph_patch2 = np.zeros((n_ps, n_ifg), dtype=np.complex64)
-    ph_res2 = np.zeros((n_ps, n_ifg), dtype=np.float32)
+    ph_res2 = np.zeros((n_ps, n_ifg), dtype=np.float64)
     ph = ph[ix, :]
     
     if len(np.atleast_1d(coh_thresh)) > 1:
@@ -202,9 +202,9 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     
     n_i = np.max(pm['grid_ij'][:, 0]) + 1
     n_j = np.max(pm['grid_ij'][:, 1]) + 1
-    K_ps2 = np.zeros(n_ps, dtype=np.float32)
-    C_ps2 = np.zeros(n_ps, dtype=np.float32)
-    coh_ps2 = np.zeros(n_ps, dtype=np.float32)
+    K_ps2 = np.zeros(n_ps, dtype=np.float64)
+    C_ps2 = np.zeros(n_ps, dtype=np.float64)
+    coh_ps2 = np.zeros(n_ps, dtype=np.float64)
     ph_filt = np.zeros((n_win, n_win, n_ifg), dtype=np.complex64)
 
     for i in range(n_ps):
@@ -225,12 +225,12 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
         # crude bug fix is to drop this patch. It needs fixing in future...
         if j_min < 0 or i_min < 0:
             # THIS NEEDS TO BECOME AN ACTUAL FIX, but not sure how...
-            ph_patch2[i, :] = 0
+            ph_patch2[i, :] = 0.0
         else:
             # remove the pixel for which the smoothign is computed
             ps_bit_i = ps_ij[0] - i_min
             ps_bit_j = ps_ij[1] - j_min
-            ph_bit = pm['ph_grid'][i_min:i_max+1, j_min:j_max+1, :]
+            ph_bit = pm['ph_grid'][i_min:i_max+1, j_min:j_max+1, :].copy()
             ph_bit[ps_bit_i, ps_bit_j, :] = 0
             
             # JJS oversample update for PS removal + [MA] general usage update
@@ -276,7 +276,9 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
 
     bperp_range = max(bperp) - min(bperp)
     keep_ix = (coh_ps2 > coh_thresh) & (abs(pm["K_ps"][ix].flatten() - K_ps2) < 2*np.pi/bperp_range)
-    print(f"{len(keep_ix)} ps selected after re-estimation of coherence")
+
+    print(f"{sum(keep_ix)} ps selected after re-estimation of coherence")
+    
     if np.sum(keep_ix) == 0:
         print("***No PS points left. Updating the stamps log for this****")
     

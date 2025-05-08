@@ -45,7 +45,7 @@ def run_stamps_steps(workdir:str):
     # with ThreadPool(processes=POOL_SIZE) as pool:
     #     pool.map(patch_task, patch_param)
         
-    # step_5_ps_merge_patches
+    # step_5_ps_merge_patches(workdir,parms)
     # step_6_ps_unwrap(workdir,parms)
     # step_aps_linear(workdir)
     # step_7a_ps_calc_scla(workdir,parms)

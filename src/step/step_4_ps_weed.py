@@ -3,6 +3,10 @@ import os
 from scipy import spatial
 from .utils import read_h5,save_h5
 
+def lscov(G, y, w):
+    sqrt_w = np.sqrt(w)[:, np.newaxis]
+    return np.linalg.lstsq(G * sqrt_w, y * sqrt_w)[0]
+
 def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
 
     print("Running Step-4 ...\t[{}]".format(patch))
@@ -64,10 +68,6 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
     for key in keys_to_remove:
         ps.pop(key, None)
 
-    if os.path.exists(os.path.join(patch_dir, hgtname)):
-        hgt = read_h5(os.path.join(patch_dir, hgtname))
-        hgt = hgt['hgt'][ix2]
-
     n_ps_low_D_A = len(ix2)
     n_ps = n_ps_low_D_A
     ix_weed = np.ones(n_ps, dtype=bool)
@@ -115,87 +115,57 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
         points = xy_weed[:, 1:3]
         delaunay_result = spatial.Delaunay(points)
         tri_simplices = delaunay_result.simplices
-        edges_all = np.vstack((tri_simplices[:, [0, 1]],
-                            tri_simplices[:, [1, 2]],
-                            tri_simplices[:, [2, 0]]))
+        edges_all = np.vstack(( tri_simplices[:, [0, 1]],
+                                tri_simplices[:, [1, 2]],
+                                tri_simplices[:, [2, 0]]))
         edges_sorted = np.sort(edges_all, axis=1)
         edgs = np.unique(edges_sorted, axis=0)
         n_edge = edgs.shape[0]
-        ph2_selected = ph2[ix_weed, :]
-        K_ps2_selected = K_ps2[ix_weed]
-        range_error_phase = -1j * np.outer(K_ps2_selected, bperp)
-        ph_weed = ph2_selected * np.exp(range_error_phase)
-        magnitude = np.abs(ph_weed)
-        ph_weed = ph_weed / (magnitude + epsilon)
-        master_col_idx_py = ps['master_ix'] - 1
-        master_noise_selected = C_ps2[ix_weed]
-        ph_weed[:, master_col_idx_py] = np.exp(1j * master_noise_selected)
-        edge_std = np.zeros(n_edge)
-        edge_max = np.zeros(n_edge)
-        phase_node2 = ph_weed[edgs[:, 1], :]
-        phase_node1 = ph_weed[edgs[:, 0], :]
-        dph_space = phase_node2 * np.conj(phase_node1)
+        
+        ph_weed = ph2[ix_weed, :] * np.exp(-1j * (np.outer(K_ps2[ix_weed], bperp.T)))
+        ph_weed = ph_weed / np.abs(ph_weed)
+        ph_weed[:, int(ps['master_ix'])] = np.exp(1j * (C_ps2[ix_weed]))
+        dph_space = ph_weed[edgs[:, 1], :] * np.conj(ph_weed[edgs[:, 0], :])
         dph_space = dph_space[:, ifg_index]
-        n_use = dph_space.shape[1]
+        n_use = len(ifg_index)
 
         print('Estimating noise for all arcs...')
-        dph_smooth = np.zeros((n_edge, n_use), dtype=np.float32)
-        dph_smooth2 = np.zeros((n_edge, n_use), dtype=np.float32)
+        dph_smooth1 = np.zeros((n_edge, n_use), dtype=np.complex64)
+        dph_smooth2 = np.zeros((n_edge, n_use), dtype=np.complex64)
 
         for i1 in range(n_use):
-            time_diff = day[ifg_index[0]] - day[ifg_index]
+            time_diff = day[ifg_index[i1]] - day[ifg_index]
             weight_factor = np.exp(-(time_diff**2) / (2 * weed_time_win**2))
-            sum_weights = np.sum(weight_factor)
-            if sum_weights > epsilon:
-                weight_factor = weight_factor / sum_weights
-            else:
-                weight_factor = np.ones(n_use) / n_use
-            dph_mean = np.sum(dph_space * weight_factor, axis=1)
-            phase_diff_from_mean = dph_space * np.conj(dph_mean[:, np.newaxis])
-            dph_mean_adj = np.angle(phase_diff_from_mean)
+            weight_factor = weight_factor / weight_factor.sum()
+
+            dph_mean = np.sum(dph_space * np.tile(weight_factor, (n_edge, 1)), axis=1)
+            dph_mean_adj = np.angle(dph_space * np.tile(np.conj(dph_mean)[:, np.newaxis], (1, n_use)))
+
             G = np.column_stack((np.ones(n_use), time_diff))
-            sqrt_W = np.sqrt(np.maximum(weight_factor, epsilon))
-            G_w = G * sqrt_W[:, np.newaxis]
-            B_w = dph_mean_adj.T.astype(np.float64) * sqrt_W[:, np.newaxis]
-            m, residuals, rank, s = np.linalg.lstsq(G_w, B_w, rcond=None)
-            trend_estimate = (G @ m).T
-            dph_mean_adj = np.angle(np.exp(1j * (dph_mean_adj - trend_estimate)))
-            B_w2 = dph_mean_adj.T.astype(np.float64) * sqrt_W[:, np.newaxis]
-            m2, residuals2, rank2, s2 = np.linalg.lstsq(G_w, B_w2, rcond=None)
-            intercept_correction = m[0, :] + m2[0, :]
-            dph_smooth[:, i1] = dph_mean * np.exp(1j * intercept_correction)
-            weight_factor_loo = weight_factor.copy()
-            weight_factor_loo[i1] = 0
-            sum_weights_loo = np.sum(weight_factor_loo)
-            if sum_weights_loo > epsilon:
-                weight_factor_loo = weight_factor_loo / sum_weights_loo
-            else:
-                weight_factor_loo[:] = 0
-            dph_smooth2[:, i1] = np.sum(dph_space * weight_factor_loo, axis=1)
+            m1 = lscov(G,dph_mean_adj.T,weight_factor)
 
+            dph_mean_adj = np.angle(np.exp(1j * (dph_mean_adj - (G @ m1).T)))
+            m2 = lscov(G,dph_mean_adj.T,weight_factor)
 
-        dph_noise = np.angle(dph_space * np.conj(dph_smooth))
+            weight_factor[i1] = 0
+            dph_smooth1[:,i1] = dph_mean * np.exp(1j * (m1[0,:] + m2[0,:]))
+            dph_smooth2[:,i1] = np.sum(dph_space * weight_factor.reshape(1, -1), axis=1)
+
+        dph_noise1 = np.angle(dph_space * np.conj(dph_smooth1))
         dph_noise2 = np.angle(dph_space * np.conj(dph_smooth2))
-        ifg_var = np.var(dph_noise2, axis=0, ddof=1)
-        A_py = bperp[ifg_index].reshape(-1, 1).astype(np.float64)
-        B_py = dph_noise.T.astype(np.float64)
-        weights_lscov = (1.0 / ifg_var).astype(np.float64)
-        weights_lscov[~np.isfinite(weights_lscov)] = epsilon
-        weights_lscov = np.maximum(weights_lscov, epsilon)
-        sqrt_W = np.sqrt(weights_lscov)
-        A_w = A_py * sqrt_W[:, np.newaxis]
-        B_w = B_py * sqrt_W[:, np.newaxis]
-        K_solution, _, _, _ = np.linalg.lstsq(A_w, B_w, rcond=None)
-        K = K_solution.T
-        baselines_row = bperp[ifg_index].reshape(1, -1)
-        baseline_error_term = K @ baselines_row
-        dph_noise = dph_noise - baseline_error_term
-        edge_std = np.std(dph_noise, axis=1, ddof=1)
-        edge_max = np.max(np.abs(dph_noise), axis=1)
+        ifg_var = np.var(dph_noise2, axis=0, ddof=0)
+
+        K = lscov(bperp[ifg_index][:, np.newaxis], dph_noise1.T, 1.0 / ifg_var).T
+        dph_noise1 = dph_noise1 - K @ (bperp[ifg_index][:, np.newaxis]).T
+
+        edge_std = np.zeros((n_edge, 1))
+        edge_max = np.zeros((n_edge, 1))
+        edge_std = np.std(dph_noise1, axis=1, keepdims=True)
+        edge_max = np.max(np.abs(dph_noise1), axis=1, keepdims=True)
 
         print('Estimating max noise for all pixels...')
-        ps_std = np.full(n_ps, np.inf, dtype=np.float32)
-        ps_max = np.full(n_ps, np.inf, dtype=np.float32)
+        ps_std = np.full(n_ps, np.inf, dtype=np.float64)
+        ps_max = np.full(n_ps, np.inf, dtype=np.float64)
         for i in range(n_edge):
             point_indices = edgs[i]
             current_edge_std = edge_std[i]
@@ -246,7 +216,8 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
 
     if os.path.exists(os.path.join(patch_dir, hgtname)):
         hgt = read_h5(os.path.join(patch_dir, hgtname))
-        hgt = hgt['hgt'][ix_weed]
+        hgt = hgt['hgt'][ix2]
+        hgt = hgt[ix_weed]
         save_h5(patch_dir,f'hgt{psver}.h5', **{'hgt': hgt})
     
     if os.path.exists(os.path.join(patch_dir, laname)):
