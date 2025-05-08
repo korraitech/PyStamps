@@ -3,20 +3,19 @@ import os
 from .utils import read_h5,save_h5
 from .llh2local import llh2local
 
-def correct_phase(patch_dir:str):
-    psver = int(read_h5(os.path.join(patch_dir, 'psver.h5'))['psver'][0][0])
+def correct_phase(patch_dir:str,psver:int):
     psname = f'ps{psver}.h5'
     phname = f'ph{psver}.h5'
     pmname = f'pm{psver}.h5'
     bpname = f'bp{psver}.h5'
 
     pm = read_h5(os.path.join(patch_dir, pmname))
-    K_ps = pm['K_ps'].astype(np.float32)
-    C_ps = pm['C_ps'].astype(np.float32)
+    K_ps = pm['K_ps']
+    C_ps = pm['C_ps']
 
     ps = read_h5(os.path.join(patch_dir, psname))
     master_ix = int(np.sum(ps['master_day'] > ps['day']))
-    n_ps = int(ps['n_ps'][0][0])
+    n_ps = ps['n_ps']
 
     bp = read_h5(os.path.join(patch_dir, bpname))
     bperp_mat = np.hstack((
@@ -24,23 +23,20 @@ def correct_phase(patch_dir:str):
         np.zeros((n_ps, 1), dtype=np.float32),
         bp['bperp_mat'][:, master_ix:])
     )
-
-    n_ifg = int(ps['n_ifg'][0][0])
+    
+    n_ifg = ps['n_ifg']
     ph = read_h5(os.path.join(patch_dir, phname))['ph']
 
-    real_part  = np.tile(K_ps, (1, n_ifg)) * bperp_mat + np.tile(C_ps, (1, n_ifg))
-    ph_complex = ph['real'] + 1j * ph['imag']
-    ph_rc = ph_complex * np.exp(-1j * real_part)
+    ph_rc = ph * np.exp(-1j * (np.tile(K_ps.reshape(-1, 1), (1, n_ifg)) * bperp_mat + np.tile(C_ps.reshape(-1, 1), (1, n_ifg))))
 
     ph_reref = np.hstack((
-        pm['ph_patch'][:, :master_ix].view('complex64').astype(np.complex64),
+        pm['ph_patch'][:, :master_ix],
         np.ones((n_ps, 1), dtype=np.complex64),
-        pm['ph_patch'][:, master_ix:].view('complex64').astype(np.complex64)
+        pm['ph_patch'][:, master_ix:]
     ))
 
     rcname = f'rc{psver}.h5'
     save_h5(patch_dir, rcname, **{'ph_rc': ph_rc, 'ph_reref': ph_reref})
-
 
 def intersect_rows(a, b):
     a_view = a.view([('', a.dtype)] * a.shape[1])
@@ -60,11 +56,10 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
       - final sorting, duplicate removal, and variable saving
     Portions assume domain-specific functions: llh2local(), getparm(), etc.
     """
-    print("Running Step-5b ...")
+    print("Running Step-5 ...")
     print('Merging patches...')
 
-    
-    psver = int(read_h5(os.path.join(workdir, 'psver.h5'))['psver'][0][0])
+    psver = 2
     psname = f"ps{psver}.h5"
     phname = f"ph{psver}.h5"
     rcname = f"rc{psver}.h5"
@@ -74,7 +69,6 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
     scnname = f"scn{psver}.h5"
     bpname = f"bp{psver}.h5"
     laname = f"la{psver}.h5"
-    incname = f"inc{psver}.h5"
     hgtname = f"hgt{psver}.h5"
 
     patchfile = os.path.join(workdir, "patch.list")
@@ -104,20 +98,19 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
     C_ps_uw = np.zeros((0, 0), dtype=np.float32)
     bperp_mat = np.zeros((0, 0), dtype=np.float32)
     la = np.zeros((0, 0), dtype=float)
-    inc = np.zeros((0, 0), dtype=float)
     hgt = np.zeros((0, 0), dtype=float)
 
     # Loop through patch directories
     for patch in dirname:
         print(f"   Merging patch {patch}")
 
-        correct_phase(os.path.join(workdir,patch))
+        correct_phase(os.path.join(workdir,patch),psver)
 
         ps = read_h5(os.path.join(workdir,patch, psname))
         if "n_image" in ps:
-            n_image = int(ps["n_image"][0][0])
+            n_image = int(ps["n_image"])
         else:
-            n_image = int(ps["n_ifg"][0][0])
+            n_image = int(ps["n_ifg"])
 
         # Load patch information and identify points in the patch
         patch_ij = np.loadtxt(os.path.join(workdir,patch, 'patch_noover.in'))
@@ -130,7 +123,7 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
         C, IA, IB = intersect_rows(ps['ij'][ix, 1:3], ij)
         remove_ix = np.concatenate([remove_ix, IB])
         C, IA, IB = intersect_rows(ps['ij'][:,1:3], ij)
-        ix_ex = np.ones(int(ps['n_ps'][0][0]), dtype=bool)
+        ix_ex = np.ones(ps['n_ps'], dtype=bool)
         ix_ex[IA] = False
         ix[ix_ex] = 1
 
@@ -156,11 +149,11 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
         if 'ph_res' in pm:
             ph_res = np.vstack(pm['ph_res'][ix, :]) if ph_res.size == 0 else np.vstack([ph_res, pm['ph_res'][ix, :]])
         if 'K_ps' in pm:
-            K_ps = np.vstack(pm['K_ps'][ix, :]) if K_ps.size == 0 else np.vstack([K_ps, pm['K_ps'][ix, :]])
+            K_ps = np.vstack(pm['K_ps'][ix]) if K_ps.size == 0 else np.vstack([K_ps, pm['K_ps'][ix]])
         if 'C_ps' in pm:
-            C_ps = np.vstack(pm['C_ps'][ix, :]) if C_ps.size == 0 else np.vstack([C_ps, pm['C_ps'][ix, :]])
+            C_ps = np.vstack(pm['C_ps'][ix]) if C_ps.size == 0 else np.vstack([C_ps, pm['C_ps'][ix]])
         if 'coh_ps' in pm:
-            coh_ps = np.vstack(pm['coh_ps'][ix, :]) if coh_ps.size == 0 else np.vstack([coh_ps, pm['coh_ps'][ix, :]])
+            coh_ps = np.vstack(pm['coh_ps'][ix]) if coh_ps.size == 0 else np.vstack([coh_ps, pm['coh_ps'][ix]])
 
         bp = read_h5(os.path.join(workdir,patch, bpname))
 
@@ -168,15 +161,11 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
         
         if os.path.exists(os.path.join(workdir,patch, laname)):
             lain = read_h5(os.path.join(workdir,patch, laname))
-            la = np.vstack(lain['la'][ix, :]) if la.size == 0 else np.vstack([la, lain['la'][ix, :]])
-
-        if os.path.exists(os.path.join(workdir,patch, incname)):
-            incin = read_h5(os.path.join(workdir,patch, incname))
-            inc = np.vstack(incin['inc'][ix, :]) if inc.size == 0 else np.vstack([inc, incin['inc'][ix, :]])
+            la = np.vstack(lain['la'][ix]) if la.size == 0 else np.vstack([la, lain['la'][ix]])
 
         if os.path.exists(os.path.join(workdir,patch, hgtname)):
             hgtin = read_h5(os.path.join(workdir,patch, hgtname))
-            hgt = np.vstack(hgtin['hgt'][ix, :]) if hgt.size == 0 else np.vstack([hgt, hgtin['hgt'][ix, :]])
+            hgt = np.vstack(hgtin['hgt'][ix]) if hgt.size == 0 else np.vstack([hgt, hgtin['hgt'][ix]])
 
         if os.path.exists(os.path.join(workdir,patch, phuwname)):
             phuw = read_h5(os.path.join(workdir,patch, phuwname))
@@ -244,7 +233,6 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
             (lonlat[:, 0] == lonlat[dup_index, 0]) & 
             (lonlat[:, 1] == lonlat[dup_index, 1])
         )[0]
-        dups_ix = keep_ix_num[dups_ix_weed]
         max_coh_index = np.argmax(coh_ps_weed[dups_ix_weed])
         remove_indices = np.delete(dups_ix_weed, max_coh_index)
         keep_ix[keep_ix_num[remove_indices]] = False
@@ -320,9 +308,6 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
     
     la = la[sort_ix, :] if la.shape[0] == n_ps_orig else np.array([])
     save_h5(workdir, laname , **{'la': la})
-
-    inc = inc[sort_ix, :] if inc.shape[0] == n_ps_orig else np.array([])
-    save_h5(workdir, incname , **{'inc': inc})
     
     hgt = hgt[sort_ix, :] if hgt.shape[0] == n_ps_orig else np.array([])
     save_h5(workdir, hgtname , **{'hgt': hgt})
@@ -336,3 +321,5 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
     ps_new['xy'] = xy
     ps_new['lonlat'] = lonlat
     save_h5(workdir, psname , **ps_new)
+
+    save_h5(workdir, 'psver.h5' , **{'psver': psver})
