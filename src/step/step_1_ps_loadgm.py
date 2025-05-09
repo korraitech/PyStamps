@@ -7,7 +7,7 @@ from .utils import read_lines, get_par, read_h5, save_h5
 from ..misc import get_module_info
 from ..logger import appLogger
 
-def step_1_ps_load_gamma(workdir: str, patch: str, num_threads: int = 1):
+def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
     """
     Initial load of files into HDF5 format in python workspace
 

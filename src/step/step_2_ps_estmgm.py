@@ -8,7 +8,7 @@ from .clap_filt import clap_filt
 from tqdm import tqdm
 from scipy import signal
 
-def step_2_ps_estm_gamma(workdir:str,patch:str,parms:dict) -> None:
+def step_2_ps_estmgm(workdir:str,patch:str,parms:dict) -> None:
     """
     Estimating gamma for candidate pixels
 

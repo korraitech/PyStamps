@@ -2,11 +2,11 @@ import os
 import json
 from .env import POOL_SIZE
 from .step.utils import read_lines
-from .step.step_1_ps_load_gamma import step_1_ps_load_gamma
-from .step.step_2_ps_estm_gamma import step_2_ps_estm_gamma
+from .step.step_1_ps_loadgm import step_1_ps_loadgm
+from .step.step_2_ps_estmgm import step_2_ps_estmgm
 from .step.step_3_ps_select import step_3_ps_select
 from .step.step_4_ps_weed import step_4_ps_weed
-from .step.step_5_ps_merge_patches import step_5_ps_merge_patches
+from .step.step_5_ps_merge import step_5_ps_merge
 # from .step.step_6_ps_unwrap import step_6_ps_unwrap
 # from .step.step_aps_linear import step_aps_linear
 # from .step.step_7a_ps_calc_scla import step_7a_ps_calc_scla
@@ -23,8 +23,8 @@ def patch_task(parmas:dict):
     patch = parmas["patch"]
     parms = parmas["parms"]
     workdir = parmas["workdir"]
-    step_1_ps_load_gamma(workdir,patch)
-    step_2_ps_estm_gamma(workdir,patch,parms)
+    step_1_ps_loadgm(workdir,patch)
+    step_2_ps_estmgm(workdir,patch,parms)
     step_3_ps_select(workdir,patch,parms)
     step_4_ps_weed(workdir,patch,parms)
 
@@ -44,7 +44,7 @@ def run_stamps_steps(workdir:str):
     with ThreadPool(processes=POOL_SIZE) as pool:
         pool.map(patch_task, patch_param)
         
-    step_5_ps_merge_patches(workdir,parms)
+    step_5_ps_merge(workdir,parms)
     # step_6_ps_unwrap(workdir,parms)
     # step_aps_linear(workdir)
     # step_7a_ps_calc_scla(workdir,parms)

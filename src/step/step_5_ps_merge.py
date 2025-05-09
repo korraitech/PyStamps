@@ -1,4 +1,5 @@
 import numpy as np
+import datetime
 import os
 from .utils import read_h5,save_h5
 from .llh2local import llh2local
@@ -46,7 +47,53 @@ def intersect_rows(a, b):
     C = a[IA] if len(IA) > 0 else np.empty((0, a.shape[1]), dtype=a.dtype)    
     return C, IA, IB
 
-def step_5_ps_merge_patches(workdir:str,parms:dict):
+def estimate_noise_stddev(workdir:str,psver:int):
+    psname = f'ps{psver}.h5'
+    phname = f'ph{psver}.h5'
+    pmname = f'pm{psver}.h5'
+    bpname = f'bp{psver}.h5'
+    ifgstdname = f'ifgstd{psver}.h5'
+
+    ps = read_h5(os.path.join(workdir, psname))
+    pm = read_h5(os.path.join(workdir, pmname))
+    bp = read_h5(os.path.join(workdir, bpname))
+
+    if os.path.exists(os.path.join(workdir,phname)):
+        phin = read_h5(os.path.join(workdir,phname))
+        ph = phin['ph']
+    else:
+        ph = ps['ph']
+    
+    n_ps = len(ps['xy'])
+    n_ifg = int(ps['n_ifg'])
+    master_ix = int(ps['master_ix'])
+
+    bperp_mat = np.concatenate([
+        bp['bperp_mat'][:, :master_ix],
+        np.zeros((n_ps, 1), dtype=np.float32),
+        bp['bperp_mat'][:, master_ix:]
+    ], axis=1)
+
+    ph_patch = np.concatenate([
+        pm['ph_patch'][:, 0:master_ix],
+        np.ones((n_ps, 1)),
+        pm['ph_patch'][:, master_ix:]
+    ], axis=1)
+
+    ph_diff = np.angle(ph * np.conj(ph_patch) * np.exp(-1j * (
+        np.tile(pm['K_ps'], (1, n_ifg)) * bperp_mat +
+        np.tile(pm['C_ps'], (1, n_ifg))
+    )))
+
+    ifg_std = np.sqrt(np.sum(ph_diff**2, axis=0) / n_ps) * 180 / np.pi
+
+    for i in range(n_ifg):
+        date_str = datetime.datetime.fromtimestamp(int(ps['day'][i] * 86400)).strftime("%d-%b-%Y")
+        print(f"{i+1:3d} {date_str} {ifg_std[i]:.2f}")
+    
+    save_h5(workdir,ifgstdname,**{'ifg_std':ifg_std})
+
+def step_5_ps_merge(workdir:str,parms:dict):
     """
     Extended Python translation of the MATLAB step_5_ps_merge_patches(psver).
     This code includes the logic for:
@@ -323,3 +370,6 @@ def step_5_ps_merge_patches(workdir:str,parms:dict):
     save_h5(workdir, psname , **ps_new)
 
     save_h5(workdir, 'psver.h5' , **{'psver': psver})
+
+    print("Estimating noise standard deviation (degrees)...")
+    estimate_noise_stddev(workdir,psver)
