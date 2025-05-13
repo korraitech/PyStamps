@@ -33,7 +33,7 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
     parms.setdefault('weed_standard_dev', 1.0)
     parms.setdefault('weed_zero_elevation', 'n')
     parms.setdefault('weed_neighbours', 'n')
-    parms.setdefault('unwrap_method', '3D')
+    parms.setdefault('unwrap_method', '3D_FULL')
     parms.setdefault('unwrap_patch_phase', 'n')
     parms.setdefault('drop_ifg_index', [])
     parms.setdefault('unwrap_la_error_flag', 'y')

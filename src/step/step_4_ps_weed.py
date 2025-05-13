@@ -1,16 +1,26 @@
 import numpy as np
 import os
-from scipy import spatial
+from ..misc import get_module_info
+from ..logger import appLogger
 from .utils import read_h5,save_h5
+from scipy import spatial
 
 def lscov(G, y, w):
     sqrt_w = np.sqrt(w)[:, np.newaxis]
     return np.linalg.lstsq(G * sqrt_w, y * sqrt_w)[0]
 
 def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
+    """
+    Weeds out neighboring PS
 
-    print("Running Step-4 ...\t[{}]".format(patch))
-    print('Weeding selected pixels...')
+    Args:
+        workdir:str - path to the working directory
+        patch:str - patch currently being processed
+        parms:dict - parameters from parms.json
+    """
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {}".format(
+            get_module_info(),workdir, patch)
+    )
     patch_dir = os.path.join(workdir,patch)
 
     weed_time_win = int(parms['weed_time_win'])

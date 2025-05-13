@@ -1,8 +1,10 @@
 import os
 import numpy as np
+from ..misc import get_module_info
+from ..logger import appLogger
 from scipy import signal
 from scipy import fft
-from .utils import read_h5,save_h5
+from .utils import read_h5,save_h5,gaussian2D
 from .ps_topofit import ps_topofit
 
 def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
@@ -68,13 +70,10 @@ def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
 
 def clap_filt_patch(ph,alpha,beta,low_pass) -> np.ndarray:
     ph[np.isnan(ph)] = 0
-    std_dev = (7 - 1) / (2 * 2.5)
-    gauss_win_1d = signal.windows.gaussian(7, std=std_dev, sym=True)
-    B = np.outer(gauss_win_1d, gauss_win_1d)
     ph_fft = fft.fft2(ph)
     
     H = np.abs(ph_fft)
-    H = fft.ifftshift(signal.convolve2d(fft.fftshift(H), B, mode='same'))
+    H = fft.ifftshift(signal.convolve2d(fft.fftshift(H), gaussian2D(7), mode='same'))
     meanH = np.median(H.flatten())
     if meanH != 0:
         H = H / meanH
@@ -87,9 +86,15 @@ def clap_filt_patch(ph,alpha,beta,low_pass) -> np.ndarray:
 def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     """
     Select PS based on gamma and D_A, re-estimating coherence if requested.
+
+    Args:
+        workdir:str - path to the working directory
+        patch:str - patch currently being processed
+        parms:dict - parameters from parms.json
     """
-    print("Running Step-03 ...\t[{}]".format(patch))
-    print('Selecting stable-phase pixels...')
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {}".format(
+            get_module_info(),workdir, patch)
+    )
     patch_dir = os.path.join(workdir,patch)
 
     slc_osf = int(parms['slc_osf'])

@@ -1,6 +1,8 @@
 import numpy as np
 import datetime
 import os
+from ..misc import get_module_info
+from ..logger import appLogger
 from .utils import read_h5,save_h5
 from .llh2local import llh2local
 
@@ -93,16 +95,15 @@ def estimate_noise_stddev(workdir:str,psver:int):
 
 def step_5_ps_merge(workdir:str,parms:dict):
     """
-    Extended Python translation of the MATLAB step_5_ps_merge_patches(psver).
-    This code includes the logic for:
-      - intersection (C, IA, IB) if grid_size == 0
-      - weighted merges if grid_size != 0
-      - overlap-difference merges (ph_uw_diff, etc.) for ph_uw, scla, scn
-      - final sorting, duplicate removal, and variable saving
-    Portions assume domain-specific functions: llh2local(), getparm(), etc.
+    Merging patches
+
+    Args:
+        workdir:str - path to the working directory
+        parms:dict - parameters from parms.json
     """
-    print("Running Step-5 ...")
-    print('Merging patches...')
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {}".format(
+            get_module_info(),workdir)
+    )
 
     psver = 2
     psname = f"ps{psver}.h5"

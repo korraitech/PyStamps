@@ -2,7 +2,7 @@ import numpy as np
 import os
 from ..misc import get_module_info
 from ..logger import appLogger
-from .utils import read_h5,save_h5
+from .utils import read_h5,save_h5,gaussian1D
 from .ps_topofit import ps_topofit
 from .clap_filt import clap_filt
 from tqdm import tqdm
@@ -239,8 +239,7 @@ def step_2_ps_estmgm(workdir:str,patch:str,parms:dict) -> None:
                 Prand[Prand > 1] = 1
                 
                 window_len = 7
-                std_dev = (7 - 1) / (2 * 2.5) # std = 6 / 5 = 1.2
-                gauss_win = signal.windows.gaussian(7, std=std_dev, sym=True)
+                gauss_win = gaussian1D(7)
                 padded = np.concatenate([np.ones(window_len), Prand])
                 filtered = signal.lfilter(gauss_win, 1, padded)
                 Prand = filtered / np.sum(gauss_win)
