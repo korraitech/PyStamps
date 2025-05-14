@@ -161,15 +161,13 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
 
         dph_noise1 = np.angle(dph_space * np.conj(dph_smooth1))
         dph_noise2 = np.angle(dph_space * np.conj(dph_smooth2))
-        ifg_var = np.var(dph_noise2, axis=0, ddof=0)
+        ifg_var = np.var(dph_noise2, ddof=1, axis=0)
 
         K = lscov(bperp[ifg_index][:, np.newaxis], dph_noise1.T, 1.0 / ifg_var).T
-        dph_noise1 = dph_noise1 - K @ (bperp[ifg_index][:, np.newaxis]).T
+        dph_noise = dph_noise1 - K @ (bperp[ifg_index][:, np.newaxis]).T
 
-        edge_std = np.zeros((n_edge, 1))
-        edge_max = np.zeros((n_edge, 1))
-        edge_std = np.std(dph_noise1, axis=1, keepdims=True)
-        edge_max = np.max(np.abs(dph_noise1), axis=1, keepdims=True)
+        edge_std = np.std(dph_noise, ddof=1, axis=1)
+        edge_max = np.max(np.abs(dph_noise), axis=1)
 
         print('Estimating max noise for all pixels...')
         ps_std = np.full(n_ps, np.inf, dtype=np.float64)
