@@ -34,7 +34,6 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
     selectname = f'select{psver}.h5'
     hgtname = f'hgt{psver}.h5'
     laname = f'la{psver}.h5'
-    incname = f'inc{psver}.h5'
     bpname = f'bp{psver}.h5'
 
     ps = read_h5(os.path.join(patch_dir, psname))
@@ -118,7 +117,6 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
     ps_max = np.zeros(n_ps)
     day = ps['day']
     bperp = ps['bperp']
-    epsilon = 1e-12
 
     # Assuming all variables are already defined before this code block
     if n_ps != 0:
@@ -134,7 +132,7 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
         
         ph_weed = ph2[ix_weed, :] * np.exp(-1j * (np.outer(K_ps2[ix_weed], bperp.T)))
         ph_weed = ph_weed / np.abs(ph_weed)
-        ph_weed[:, int(ps['master_ix'])] = np.exp(1j * (C_ps2[ix_weed]))
+        ph_weed[:, int(ps['master_ix'])] = np.exp(1j * (C_ps2[ix_weed].flatten()))
         dph_space = ph_weed[edgs[:, 1], :] * np.conj(ph_weed[edgs[:, 0], :])
         dph_space = dph_space[:, ifg_index]
         n_use = len(ifg_index)
@@ -235,12 +233,6 @@ def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
         la = la['la'][ix2]
         la = la[ix_weed]
         save_h5(patch_dir,f'la{psver}.h5', **{'la': la})
-        
-    if os.path.exists(os.path.join(patch_dir, incname)):
-        inc = read_h5(os.path.join(patch_dir, incname))
-        inc = inc['inc'][ix2]
-        inc = inc[ix_weed]
-        save_h5(patch_dir,f'inc{psver}.h5', **{'inc': inc})
         
     if os.path.exists(os.path.join(patch_dir, bpname)):
         bp = read_h5(os.path.join(patch_dir, bpname))

@@ -93,7 +93,6 @@ def step_6_ps_unwrap(workdir:str,parms:dict):
     options.setdefault('n_temp_wraps', 2)
     options.setdefault('max_bperp_for_temp_est', 100)
     options.setdefault('variance', None)
-    options.setdefault('ph_uw_predef', None)
     options.setdefault('unwrap_method', '3D_FULL')
     
     options['n_trial_wraps'] = (bperp_range * max_K / (2 * np.pi))
@@ -105,7 +104,7 @@ def step_6_ps_unwrap(workdir:str,parms:dict):
     day = ps['day'] - ps['master_day']
 
     # Calling unwrapping function Snaphu
-    uw_grid_wrapped(ph_w[:, unwrap_ifg_index],ps['xy'],options)
+    uw_grid_wrapped(workdir,ph_w[:, unwrap_ifg_index],ps['xy'],options)
     # ph_uw_some, msd_some = uw_3d( ph_w[:, unwrap_ifg_index], ps['xy'], day, 
     #     ifgday_ix[unwrap_ifg_index], ps['bperp'][unwrap_ifg_index], options
     # )

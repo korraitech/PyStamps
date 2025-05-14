@@ -2,10 +2,7 @@ import os
 import numpy as np
 from ..misc import get_module_info
 from ..logger import appLogger
-from scipy import signal
-from scipy import fft
-from .utils import read_h5,save_h5,gaussian2D
-from .ps_topofit import ps_topofit
+from .utils import read_h5,save_h5
 
 def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
                         select_method,max_percent_rand,min_coh,low_coh_thresh) ->float:
@@ -49,7 +46,7 @@ def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
     nonnanix = ~np.isnan(min_coh)
     coh_thresh_coeffs = []
     if np.sum(nonnanix) < 1:
-        print('Not enough random phase pixels to set gamma threshold')
+        print('Not enough random phase pixels to set gamma threshold - using default threshold of 0.3')
         coh_thresh = 0.3
     else:
         min_coh_filtered = min_coh[nonnanix]
@@ -68,21 +65,6 @@ def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
     
     return np.maximum(coh_thresh, 0), coh_thresh_coeffs
 
-def clap_filt_patch(ph,alpha,beta,low_pass) -> np.ndarray:
-    ph[np.isnan(ph)] = 0
-    ph_fft = fft.fft2(ph)
-    
-    H = np.abs(ph_fft)
-    H = fft.ifftshift(signal.convolve2d(fft.fftshift(H), gaussian2D(7), mode='same'))
-    meanH = np.median(H.flatten())
-    if meanH != 0:
-        H = H / meanH
-    H = H ** alpha
-    H = H - 1
-    H[H < 0] = 0
-    G = H * beta + low_pass
-    return fft.ifft2(ph_fft * G)
-
 def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     """
     Select PS based on gamma and D_A, re-estimating coherence if requested.
@@ -97,7 +79,6 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     )
     patch_dir = os.path.join(workdir,patch)
 
-    slc_osf = int(parms['slc_osf'])
     clap_alpha = int(parms['clap_alpha'])
     clap_beta = float(parms['clap_beta'])
     n_win = int(parms['clap_win'])
@@ -117,7 +98,6 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     phname = f'ph{psver}.h5'
     pmname = f'pm{psver}.h5'
     daname = f'da{psver}.h5'
-    bpname = f'bp{psver}.h5'
     selectname = f'select{psver}.h5'
     
     ps = read_h5(os.path.join(patch_dir, psname))
@@ -178,7 +158,6 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     n_ps = len(ix)
     print(f'{n_ps} PS selected initially')
 
-    # Above code are validated
     ###########################################################################
     #### reject part-time PS
     ###########################################################################
@@ -196,94 +175,14 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
         n_ps = len(ix)
         print(f'{n_ps} PS left after pps rejection')
     
-    del pm['ph_res']
-    del pm['ph_patch']
-    ph_patch2 = np.zeros((n_ps, n_ifg), dtype=np.complex64)
-    ph_res2 = np.zeros((n_ps, n_ifg), dtype=np.float64)
-    ph = ph[ix, :]
-    
-    if len(np.atleast_1d(coh_thresh)) > 1:
-        coh_thresh = coh_thresh[ix]
-    
-    n_i = np.max(pm['grid_ij'][:, 0]) + 1
-    n_j = np.max(pm['grid_ij'][:, 1]) + 1
-    K_ps2 = np.zeros(n_ps, dtype=np.float64)
-    C_ps2 = np.zeros(n_ps, dtype=np.float64)
-    coh_ps2 = np.zeros(n_ps, dtype=np.float64)
-    ph_filt = np.zeros((n_win, n_win, n_ifg), dtype=np.complex64)
-
-    for i in range(n_ps):
-        ps_ij = pm['grid_ij'][ix[i], :]
-        i_min = max(ps_ij[0] - n_win//2, 0)
-        i_max = i_min + n_win - 1
-        if i_max >= n_i:
-            i_min = i_min - (i_max - n_i + 1)
-            i_max = n_i - 1
-
-        j_min = max(ps_ij[1] - n_win//2, 0)
-        j_max = j_min + n_win - 1
-        if j_max >= n_j:
-            j_min = j_min - (j_max - n_j + 1)
-            j_max = n_j - 1
-
-        # it could occur that your patch size is smaller than the filter size
-        # crude bug fix is to drop this patch. It needs fixing in future...
-        if j_min < 0 or i_min < 0:
-            # THIS NEEDS TO BECOME AN ACTUAL FIX, but not sure how...
-            ph_patch2[i, :] = 0.0
-        else:
-            # remove the pixel for which the smoothign is computed
-            ps_bit_i = ps_ij[0] - i_min
-            ps_bit_j = ps_ij[1] - j_min
-            ph_bit = pm['ph_grid'][i_min:i_max+1, j_min:j_max+1, :].copy()
-            ph_bit[ps_bit_i, ps_bit_j, :] = 0
-            
-            # JJS oversample update for PS removal + [MA] general usage update
-            ix_i = np.arange(ps_bit_i-(slc_osf-1), ps_bit_i+(slc_osf-1)+1)
-            ix_i = ix_i[(ix_i >= 0) & (ix_i < ph_bit.shape[0])]
-            ix_j = np.arange(ps_bit_j-(slc_osf-1), ps_bit_j+(slc_osf-1)+1)
-            ix_j = ix_j[(ix_j >= 0) & (ix_j < ph_bit.shape[1])]
-            ph_bit[np.ix_(ix_i, ix_j)] = 0
-
-            for i_ifg in range(n_ifg):
-                ph_filt[:, :, i_ifg] = clap_filt_patch(ph_bit[:, :, i_ifg], clap_alpha, clap_beta, pm['low_pass'])
-            ph_patch2[i, :] = ph_filt[ps_bit_i, ps_bit_j, :]
-
-        if i % 10000 == 9999:
-                print(f"{i+1} patches re-estimated")
-
     del pm['ph_grid']
-    bp = read_h5(os.path.join(patch_dir, bpname))
-    bperp_mat = bp['bperp_mat'][ix, :]
+    ph_patch2 = pm['ph_patch'][ix, :]
+    ph_res2 = pm['ph_res'][ix, :]
+    K_ps2 = pm['K_ps'][ix]
+    C_ps2 = pm['C_ps'][ix]
+    coh_ps2 = pm['coh_ps'][ix]
+    keep_ix = np.ones_like(ix, dtype=bool)
 
-    for i in range(n_ps):
-        psdph = ph[i, :] * np.conj(ph_patch2[i, :])
-        if np.sum(psdph == 0) == 0:  # insist on a non-null value in every ifg
-            psdph = psdph / np.abs(psdph)
-            [Kopt, Copt, cohopt, ph_residual] = ps_topofit(psdph[ifg_index], bperp_mat[i, ifg_index].T, pm['n_trial_wraps'])
-            K_ps2[i] = Kopt[0]
-            C_ps2[i] = Copt
-            coh_ps2[i] = cohopt
-            ph_res2[i, ifg_index] = np.angle(ph_residual)
-        else:
-            K_ps2[i] = np.nan
-            coh_ps2[i] = np.nan
-        
-        if i % 10000 == 0 and i > 0:
-            print(f'{i} coherences re-estimated')
-
-    pm['coh_ps'][ix] = coh_ps2.reshape(-1, 1)
-    
-    coh_thresh,coh_thresh_coeffs = calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
-                    select_method,max_percent_rand,min_coh,low_coh_thresh)
-
-    print(f"Reestimation gamma threshold: {np.min(coh_thresh):.3f} at D_A={np.min(D_A):.2f} to {np.max(coh_thresh):.3f} at D_A={np.max(D_A):.2f}")
-
-    bperp_range = max(bperp) - min(bperp)
-    keep_ix = (coh_ps2 > coh_thresh) & (abs(pm["K_ps"][ix].flatten() - K_ps2) < 2*np.pi/bperp_range)
-
-    print(f"{sum(keep_ix)} ps selected after re-estimation of coherence")
-    
     if np.sum(keep_ix) == 0:
         print("***No PS points left. Updating the stamps log for this****")
     

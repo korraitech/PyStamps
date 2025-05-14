@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import gaussian2D
+from .utils import gaussian2D,save_h5
 
 def wrap_filt(ph, n_win, alpha, low_flag):
     
@@ -96,15 +96,15 @@ def wrap_filt(ph, n_win, alpha, low_flag):
     
     return ph_out, ph_out_low 
 
-def uw_grid_wrapped(ph_in, xy_in, options):
+def uw_grid_wrapped(workdir, ph_in, xy_in, options):
 
     print('Resampling phase to grid...')
 
-    pix_size = options["grid_size"]
-    prefilt_win = options["prefilt_win"]
-    lowfilt_flag = options["lowfilt_flag"]
-    goldfilt_flag = options["goldfilt_flag"]
-    gold_alpha = options["gold_alpha"]
+    pix_size = options['grid_size']
+    prefilt_win = options['prefilt_win']
+    lowfilt_flag = options['lowfilt_flag']
+    goldfilt_flag = options['goldfilt_flag']
+    gold_alpha = options['gold_alpha']
 
     n_ps, n_ifg = ph_in.shape
     print(f'   Number of interferograms  : {n_ifg}')
@@ -133,7 +133,6 @@ def uw_grid_wrapped(ph_in, xy_in, options):
     if min(n_i, n_j) < prefilt_win:
         raise ValueError(f'Minimum dimension of the resampled grid ({min(n_i, n_j)} pixels) '
                         f'is less than prefilter window size ({prefilt_win})')
-
     for i1 in range(n_ifg):
         if np.isreal(ph_in).all():
             ph_this = np.exp(1j * ph_in[:, i1])
@@ -151,8 +150,7 @@ def uw_grid_wrapped(ph_in, xy_in, options):
             if lowfilt_flag.lower() == 'y':
                 ph_lowpass = np.zeros_like(ph)
             else:
-                ph_lowpass = None
-            ph_uw_predef = None
+                ph_lowpass = []
 
         if goldfilt_flag.lower() == 'y' or lowfilt_flag.lower() == 'y':
             ph_this_gold, ph_this_low = wrap_filt(ph_grid, prefilt_win, gold_alpha, lowfilt_flag)
@@ -174,3 +172,7 @@ def uw_grid_wrapped(ph_in, xy_in, options):
                          (nz_i + 0.5) * pix_size))
     ij = np.column_stack((nz_i + 1, nz_j + 1))
 
+    save_h5(workdir,'uw_grid.h5',**{'ph':ph, 'ph_in':ph_in, 'ph_lowpass':ph_lowpass,
+                                    'xy':xy, 'ij':ij, 'nzix':nzix, 'grid_x_min':grid_x_min,
+                                    'grid_y_min':grid_y_min, 'n_i':n_i, 'n_j':n_j, 'n_ifg':n_ifg,
+                                    'n_ps':n_ps, 'grid_ij':grid_ij, 'pix_size':pix_size})
