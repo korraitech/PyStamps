@@ -4,6 +4,50 @@ from ..misc import get_module_info
 from ..logger import appLogger
 from .utils import read_h5,save_h5
 from .uw_grid_wrapped import uw_grid_wrapped
+from .uw_space_time import uw_space_time
+from scipy.spatial import cKDTree
+
+def uw_interp(workdir:str):
+    print('Interpolating grid...')
+
+    uw = read_h5(os.path.join(workdir,'uw_grid.h5'))
+    y, x = np.nonzero(uw['nzix'])
+    xy = np.column_stack((x, y))
+    xy = xy[np.lexsort((xy[:,1], xy[:,0]))]
+    
+    nrow, ncol = uw['nzix'].shape
+    X, Y = np.meshgrid(np.arange(ncol), np.arange(nrow))
+    
+    query_points = np.column_stack((X.flatten(), Y.flatten()))
+    tree = cKDTree(xy)
+    _, Z = tree.query(query_points)
+
+    Zvec_col  = Z.reshape(nrow,ncol).flatten(order='F')
+    grid_edges = np.column_stack((Zvec_col[:-nrow],Zvec_col[nrow:]))
+    grid_edges = np.vstack((grid_edges, np.column_stack((Z[:-ncol], Z[ncol:]))))
+
+    sort_edges = np.sort(grid_edges, axis=1)
+    I_sort = np.argsort(grid_edges, axis=1)
+    edge_sign = I_sort[:, 1] - I_sort[:, 0]
+
+    alledges, J = np.unique(sort_edges, axis=0, return_inverse=True)
+    sameix = (alledges[:, 0] == alledges[:, 1])
+    alledges[sameix, :] = 0
+    
+    edgs, J2 = np.unique(alledges, axis=0,return_inverse=True)
+    n_edge = len(edgs) - 1
+    edgs = np.column_stack((np.arange(n_edge), edgs[1:]))
+
+    gridedgeix = (J2[J]) * edge_sign
+    colix = gridedgeix[:nrow*(ncol-1)].reshape(nrow, ncol-1)
+    rowix = gridedgeix[nrow*(ncol-1):].reshape(ncol, nrow-1).T
+
+    print(f'   Number of unique edges in grid: {n_edge}')
+    
+    # Save the results
+    save_h5(workdir,'uw_interp.h5',**{'edgs':edgs, 'n_edge':n_edge, 
+                                      'rowix':rowix, 'colix':colix, 
+                                      'Z':Z.reshape(nrow,ncol)})
 
 def step_6_ps_unwrap(workdir:str,parms:dict):
     """
@@ -105,6 +149,8 @@ def step_6_ps_unwrap(workdir:str,parms:dict):
 
     # Calling unwrapping function Snaphu
     uw_grid_wrapped(workdir,ph_w[:, unwrap_ifg_index],ps['xy'],options)
+    uw_interp(workdir)
+    uw_space_time(workdir,day, ifgday_ix, ps['bperp'][unwrap_ifg_index],options['time_win'],  options['n_trial_wraps'])
     # ph_uw_some, msd_some = uw_3d( ph_w[:, unwrap_ifg_index], ps['xy'], day, 
     #     ifgday_ix[unwrap_ifg_index], ps['bperp'][unwrap_ifg_index], options
     # )

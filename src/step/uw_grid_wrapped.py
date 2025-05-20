@@ -1,5 +1,6 @@
 import numpy as np
 from .utils import gaussian2D,save_h5
+from scipy.signal import convolve2d
 
 def wrap_filt(ph, n_win, alpha, low_flag):
     
@@ -14,7 +15,7 @@ def wrap_filt(ph, n_win, alpha, low_flag):
     if low_flag.lower() == 'y':
         ph_out_low = np.zeros_like(ph)
     else:
-        ph_out_low = None
+        ph_out_low = []
     
     x = np.arange(1, n_win//2 + 1)
     X, Y = np.meshgrid(x, x)
@@ -24,14 +25,10 @@ def wrap_filt(ph, n_win, alpha, low_flag):
         np.flipud(np.hstack([X, np.fliplr(X)]))
     ])
     
-    # Replace NaN values with 0
+
     ph = np.nan_to_num(ph)
-    
     B = gaussian2D(7)
-    
-    ph_bit = np.zeros((n_win + n_pad, n_win + n_pad), dtype=complex)
-    
-    # Create low-pass filter
+    ph_bit = np.zeros((n_win + n_pad, n_win + n_pad), dtype=np.complex64)
     L = np.fft.ifftshift(gaussian2D(n_win + n_pad, 16))
     
     for ix1 in range(n_win_i):
@@ -63,15 +60,7 @@ def wrap_filt(ph, n_win, alpha, low_flag):
             ph_bit[:n_win, :n_win] = ph[i1:i2, j1:j2]
             ph_fft = np.fft.fft2(ph_bit)
             H = np.abs(ph_fft)
-            
-            # Smooth response using 2D convolution
-            H = np.fft.ifftshift(
-                np.convolve(
-                    np.fft.fftshift(H.flatten()),
-                    B.flatten(),
-                    mode='same'
-                ).reshape(H.shape)
-            )
+            H = np.fft.ifftshift(convolve2d(np.fft.fftshift(H),B,mode='same'))
             
             meanH = np.median(H)
             if meanH != 0:
@@ -109,9 +98,6 @@ def uw_grid_wrapped(workdir, ph_in, xy_in, options):
     n_ps, n_ifg = ph_in.shape
     print(f'   Number of interferograms  : {n_ifg}')
     print(f'   Number of points per ifg  : {n_ps}')
-
-    # Create index array
-    xy_in[:, 0] = np.arange(1, n_ps + 1)
 
     grid_x_min = np.min(xy_in[:, 1])
     grid_y_min = np.min(xy_in[:, 2])
@@ -158,7 +144,9 @@ def uw_grid_wrapped(workdir, ph_in, xy_in, options):
                 ph_lowpass[:, i1] = ph_this_low[nzix]
         
         if goldfilt_flag.lower() == 'y':
-            ph[:, i1] = ph_this_gold[nzix]
+            ph_flat = ph_this_gold.flatten(order='F')
+            nzix_flat = nzix.flatten(order='F')
+            ph[:, i1] = ph_flat[nzix_flat]
         else:
             ph[:, i1] = ph_grid[nzix]
 
@@ -167,10 +155,10 @@ def uw_grid_wrapped(workdir, ph_in, xy_in, options):
 
     # Find non-zero indices
     nz_i, nz_j = np.where(ph_grid != 0)
-    xy = np.column_stack((np.arange(1, n_ps + 1),
-                         (nz_j + 0.5) * pix_size,
-                         (nz_i + 0.5) * pix_size))
-    ij = np.column_stack((nz_i + 1, nz_j + 1))
+    xy = np.column_stack(((nz_j+ 0.5) * pix_size, (nz_i + 0.5) * pix_size))
+    xy = np.column_stack((np.arange(n_ps),xy[np.lexsort((xy[:, 1], xy[:, 0]))]))
+    ij = np.column_stack((nz_i+ 1, nz_j + 1))
+    ij = ij[np.lexsort((ij[:, 0], ij[:, 1]))]
 
     save_h5(workdir,'uw_grid.h5',**{'ph':ph, 'ph_in':ph_in, 'ph_lowpass':ph_lowpass,
                                     'xy':xy, 'ij':ij, 'nzix':nzix, 'grid_x_min':grid_x_min,

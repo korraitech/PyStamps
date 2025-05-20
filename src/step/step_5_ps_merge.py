@@ -251,7 +251,7 @@ def step_5_ps_merge(workdir:str,parms:dict):
     xy = xy.T.astype(np.float32)
     sort_ix = np.lexsort((xy[:, 0], xy[:, 1]))
     xy_sort = xy[sort_ix]
-    xy = np.column_stack((np.arange(1, len(xy_sort) + 1), xy_sort))
+    xy = np.column_stack((np.arange(len(xy_sort)), xy_sort))
     xy[:, 1:3] = np.round(xy[:, 1:3] * 1000) / 1000
     lonlat = lonlat[sort_ix]
     
@@ -289,7 +289,7 @@ def step_5_ps_merge(workdir:str,parms:dict):
 
     ps_new = ps.copy()
     ps_new['n_ps'] = n_ps
-    ps_new['ij'] = np.column_stack((np.arange(1, n_ps + 1), ij[sort_ix, :]))
+    ps_new['ij'] = np.column_stack((np.arange(n_ps), ij[sort_ix, :]))
     ps_new['xy'] = xy
     ps_new['lonlat'] = lonlat
     save_h5(workdir, psname , **ps_new)
