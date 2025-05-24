@@ -5,6 +5,7 @@ from ..logger import appLogger
 from .utils import read_h5,save_h5
 from .uw_grid_wrapped import uw_grid_wrapped
 from .uw_space_time import uw_space_time
+from .uw_stat_costs import uw_stat_costs
 from scipy.spatial import cKDTree
 
 def uw_interp(workdir:str):
@@ -13,14 +14,13 @@ def uw_interp(workdir:str):
     uw = read_h5(os.path.join(workdir,'uw_grid.h5'))
     y, x = np.nonzero(uw['nzix'])
     xy = np.column_stack((x, y))
-    xy = xy[np.lexsort((xy[:,1], xy[:,0]))]
+    xy = xy[np.lexsort((xy[:,1], xy[:,0]))] + 1
     
     nrow, ncol = uw['nzix'].shape
-    X, Y = np.meshgrid(np.arange(ncol), np.arange(nrow))
+    X, Y = np.meshgrid(np.arange(1 ,ncol+1), np.arange(1,nrow+1))
     
-    query_points = np.column_stack((X.flatten(), Y.flatten()))
-    tree = cKDTree(xy)
-    _, Z = tree.query(query_points)
+    query_points = np.column_stack((X.flatten(order='F'), Y.flatten(order='F')))
+    _, Z = cKDTree(xy).query(query_points)
 
     Zvec_col  = Z.reshape(nrow,ncol).flatten(order='F')
     grid_edges = np.column_stack((Zvec_col[:-nrow],Zvec_col[nrow:]))
@@ -48,6 +48,33 @@ def uw_interp(workdir:str):
     save_h5(workdir,'uw_interp.h5',**{'edgs':edgs, 'n_edge':n_edge, 
                                       'rowix':rowix, 'colix':colix, 
                                       'Z':Z.reshape(nrow,ncol)})
+
+def uw_unwrap_from_grid(workdir:str):
+    print('Unwrapping from grid...')
+
+    uw = read_h5(os.path.join(workdir,'uw_grid.h5'))
+    uu = read_h5(os.path.join(workdir,'uw_phaseuw.h5'))
+
+    n_ps, n_ifg = uw['ph_in'].shape
+    gridix = np.zeros_like(uw['nzix'])
+    gridix[uw['nzix']] = np.arange(uw['n_ps'])
+
+    ph_uw = np.zeros((n_ps, n_ifg), dtype=np.float32)
+
+    for i in range(n_ps):
+        ix = gridix[uw['grid_ij'][i, 0], uw['grid_ij'][i, 1]]
+        if ix == 0:
+            ph_uw[i, :] = np.nan  # wrapped phase values were zero
+        else:
+            ph_uw_pix = uu['ph_uw'][ix, :]
+            if np.isreal(uw['ph_in']):
+                ph_uw[i, :] = ph_uw_pix + np.angle(np.exp(1j * (uw['ph_in'][i, :] - ph_uw_pix)))
+            else:
+                ph_uw[i, :] = ph_uw_pix + np.angle(uw['ph_in'][i, :] * np.exp(-1j * ph_uw_pix))
+    
+    msd = uu['msd']
+    
+    return ph_uw, msd 
 
 def step_6_ps_unwrap(workdir:str,parms:dict):
     """
@@ -150,24 +177,23 @@ def step_6_ps_unwrap(workdir:str,parms:dict):
     # Calling unwrapping function Snaphu
     uw_grid_wrapped(workdir,ph_w[:, unwrap_ifg_index],ps['xy'],options)
     uw_interp(workdir)
-    uw_space_time(workdir,day, ifgday_ix, ps['bperp'][unwrap_ifg_index],options['time_win'],  options['n_trial_wraps'])
-    # ph_uw_some, msd_some = uw_3d( ph_w[:, unwrap_ifg_index], ps['xy'], day, 
-    #     ifgday_ix[unwrap_ifg_index], ps['bperp'][unwrap_ifg_index], options
-    # )
-
-    # # Initialize output arrays
-    # ph_uw = np.zeros((n_ps, n_ifg), dtype='float32')
-    # msd = np.zeros(n_ifg, dtype='float32')
+    uw_space_time(workdir,day, ifgday_ix[unwrap_ifg_index], 
+                  ps['bperp'][unwrap_ifg_index],options['time_win'],  options['n_trial_wraps'])
+    uw_stat_costs(workdir)
+    ph_uw_some, msd_some = uw_unwrap_from_grid(workdir)
     
-    # # Assign unwrapped results
-    # ph_uw[:, unwrap_ifg_index] = ph_uw_some
-    # if 'msd_some' in locals():
-    #     msd[unwrap_ifg_index] = msd_some
+    # Initialize output arrays
+    ph_uw = np.zeros((n_ps, n_ifg), dtype='float32')
+    msd = np.zeros(n_ifg, dtype='float32')
+    
+    # Assign unwrapped results
+    ph_uw[:, unwrap_ifg_index] = ph_uw_some
+    msd[unwrap_ifg_index] = msd_some
 
-    # # Zero out non-unwrapped interferograms
-    # non_unwrap_ifgs = np.setdiff1d(np.arange(n_ifg), unwrap_ifg_index)
-    # ph_uw[:, non_unwrap_ifgs] = 0
+    # Zero out non-unwrapped interferograms
+    non_unwrap_ifgs = np.setdiff1d(np.arange(n_ifg), unwrap_ifg_index)
+    ph_uw[:, non_unwrap_ifgs] = 0
 
-    # # Save results
-    # save_h5(workdir,phuwname, **{'ph_uw': ph_uw, 'msd': msd})
+    # Save results
+    save_h5(workdir,phuwname, **{'ph_uw': ph_uw, 'msd': msd})
     

@@ -68,3 +68,7 @@ def gaussian1D(w:int, alpha:float = 2.5):
 def gaussian2D(w:int, alpha:float = 2.5):
     gaussian_1d = gaussian1D(w,alpha)
     return np.outer(gaussian_1d, gaussian_1d)
+
+def lscov(G, y, w):
+    sqrt_w = np.sqrt(w)[:, np.newaxis]
+    return np.linalg.lstsq(G * sqrt_w, y * sqrt_w)[0]

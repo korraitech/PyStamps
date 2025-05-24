@@ -2,12 +2,8 @@ import numpy as np
 import os
 from ..misc import get_module_info
 from ..logger import appLogger
-from .utils import read_h5,save_h5
+from .utils import read_h5,save_h5,lscov
 from scipy import spatial
-
-def lscov(G, y, w):
-    sqrt_w = np.sqrt(w)[:, np.newaxis]
-    return np.linalg.lstsq(G * sqrt_w, y * sqrt_w)[0]
 
 def step_4_ps_weed(workdir:str, patch:str, parms:dict) -> None:
     """
