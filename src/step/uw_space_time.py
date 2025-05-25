@@ -10,7 +10,7 @@ def uw_space_time(workdir, day, ifgday_ix, bperp, time_win, n_trial_wraps):
     ui = read_h5(os.path.join(workdir,'uw_interp.h5'))
 
     n_ifg = uw['n_ifg']
-    n_edge = ui['n_edge'][0][0]
+    n_edge = ui['n_edge']
     n_image = day.shape[0]
     
     # Calculate dph_space

@@ -52,7 +52,7 @@ def uw_stat_costs(workdir):
     Z = np.ravel(ui['Z'], order='F')
 
     grid_edges = np.abs(np.concatenate((colix[np.abs(colix) > 0], rowix[np.abs(rowix) > 0])))
-    bins = np.arange(1, ui['n_edge'][0, 0] + 1)
+    bins = np.arange(1, ui['n_edge'] + 1)
     n_edges = np.histogram(grid_edges, bins=np.append(bins, bins[-1] + 1))[0]
 
     sigsq_noise = (np.std(dph_noise, axis=1, ddof=1) / (2 * np.pi))**2
