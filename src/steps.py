@@ -9,8 +9,7 @@ from .step.step_4_ps_weed import step_4_ps_weed
 from .step.step_5_ps_merge import step_5_ps_merge
 from .step.step_6_ps_unwrap import step_6_ps_unwrap
 from .step.step_aps_linear import step_aps_linear
-# from .step.step_7a_ps_calc_scla import step_7a_ps_calc_scla
-# from .step.step_7b_ps_smooth_scla import step_7b_ps_smooth_scla
+from .step.step_7_ps_scla import step_7_ps_scla
 from multiprocessing.pool import ThreadPool
 
 def read_json(path:str):
@@ -47,5 +46,4 @@ def run_stamps_steps(workdir:str):
     step_5_ps_merge(workdir,parms)
     step_6_ps_unwrap(workdir,parms)
     step_aps_linear(workdir)
-    # step_7a_ps_calc_scla(workdir,parms)
-    # step_7b_ps_smooth_scla(workdir)
+    step_7_ps_scla(workdir,parms)
