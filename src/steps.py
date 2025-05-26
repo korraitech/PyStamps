@@ -10,6 +10,7 @@ from .step.step_5_ps_merge import step_5_ps_merge
 from .step.step_6_ps_unwrap import step_6_ps_unwrap
 from .step.step_aps_linear import step_aps_linear
 from .step.step_7_ps_scla import step_7_ps_scla
+from .step.step_8_ps_plot import step_8_ps_plot
 from multiprocessing.pool import ThreadPool
 
 def read_json(path:str):
@@ -47,3 +48,4 @@ def run_stamps_steps(workdir:str):
     step_6_ps_unwrap(workdir,parms)
     step_aps_linear(workdir)
     step_7_ps_scla(workdir,parms)
+    step_8_ps_plot(workdir,parms)
