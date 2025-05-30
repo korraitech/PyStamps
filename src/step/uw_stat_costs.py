@@ -3,27 +3,22 @@ from .utils import read_h5,save_h5
 import os
 
 def run_snaphu(workdir,rowcost,colcost,ifgw,ncol):
-    # Write cost file
     with open(os.path.join(workdir,'snaphu.costinfile'), 'wb') as fid:
         fid.write(rowcost.astype(np.int16).tobytes())
         fid.write(colcost.astype(np.int16).tobytes())
 
-    # Write input file
-    vname_flt = np.zeros((ifgw.shape[0], ifgw.shape[1] * 2), dtype='=f4')
+    vname_flt = np.zeros((ifgw.shape[0], ifgw.shape[1] * 2), dtype=np.float32)
     vname_flt[:, 0::2] = np.real(ifgw)
     vname_flt[:, 1::2] = np.imag(ifgw)
     with open(os.path.join(workdir,'snaphu.in'), 'wb') as fid:
-        vname_flt.T.astype('=f4').tobytes('F')
         fid.write(vname_flt.T.tobytes('F'))
 
-    # Run snaphu
     cmdstr = f'snaphu -d -f {os.path.join(workdir,"snaphu.conf")} {ncol} > {os.path.join(workdir,"snaphu.log")}'
     os.system(cmdstr)
 
-    # Read output
     with open(os.path.join(workdir,'snaphu.out'), 'rb') as fid:
-        # ifguw = np.fromfile(fid, dtype=np.float32).reshape(ncol, -1).T
-        ifguw = np.fromfile(fid, dtype='=f4').reshape(-1, ncol).T
+        ifguw = np.fromfile(fid, dtype=np.float32).reshape(-1, ncol).T
+    
     return ifguw
 
 def uw_stat_costs(workdir):
@@ -101,22 +96,33 @@ def uw_stat_costs(workdir):
     for i1 in subset_ifg_index:
         print(f'   Processing IFG {i1+1} of {len(subset_ifg_index)}')
 
-        rowidx_flat = rowix.flatten('F')[nzrowix.flatten('F')]
-        colidx_flat = colix.flatten('F')[nzcolix.flatten('F')]
+        nzrowix_flat = nzrowix.flatten('F')
+        nzcolix_flat = nzcolix.flatten('F')
+        rowidx_flat = rowix.flatten('F')[nzrowix_flat]
+        colidx_flat = colix.flatten('F')[nzcolix_flat]
 
-        rowstdgrid[nzrowix] = sigsq[np.abs(rowidx_flat).astype(np.int16)-1]
+        rowstdgrid_flat = rowstdgrid.flatten('F')
+        rowstdgrid_flat[nzrowix_flat] = sigsq[np.abs(rowidx_flat).astype(np.int16)-1]
+        rowstdgrid = rowstdgrid_flat.reshape(rowstdgrid.shape, order='F')
         rowcost[:, 1::4] = rowstdgrid
-        colstdgrid[nzcolix] = sigsq[np.abs(colidx_flat).astype(np.int16)-1]
+
+        colstdgrid_flat = colstdgrid.flatten('F')
+        colstdgrid_flat[nzcolix_flat] = sigsq[np.abs(colidx_flat).astype(np.int16)-1]
+        colstdgrid = colstdgrid_flat.reshape(colstdgrid.shape, order='F')
         colcost[:, 1::4] = colstdgrid
 
         offset_cycle = (np.angle(np.exp(1j * dph_space_uw[:, i1])) - dph_smooth[:, i1]) / (2 * np.pi)
 
         offgrid = np.zeros(rowix.shape, dtype=np.int16)
-        offgrid[nzrowix] = np.round(offset_cycle[np.abs(rowidx_flat).astype(np.int16) -1] * np.sign(rowidx_flat) * nshortcycle).astype(np.int16)
+        offgrid_flat = offgrid.flatten('F')
+        offgrid_flat[nzrowix_flat] = np.round(offset_cycle[np.abs(rowidx_flat).astype(np.int16) -1] * np.sign(rowidx_flat) * nshortcycle).astype(np.int16)
+        offgrid = offgrid_flat.reshape(offgrid.shape, order='F')
         rowcost[:, 0::4] = -offgrid
 
         offgrid = np.zeros(colix.shape, dtype=np.int16)
-        offgrid[nzcolix] = np.round(offset_cycle[np.abs(colidx_flat).astype(np.int16) -1] * np.sign(colidx_flat) * nshortcycle).astype(np.int16)
+        offgrid_flat = offgrid.flatten('F')
+        offgrid_flat[nzcolix_flat] = np.round(offset_cycle[np.abs(colidx_flat).astype(np.int16) -1] * np.sign(colidx_flat) * nshortcycle).astype(np.int16)
+        offgrid = offgrid_flat.reshape(offgrid.shape, order='F')
         colcost[:, 0::4] = offgrid
 
         ifgwght = ph[Z - 1, i1].reshape(nrow, ncol, order='F')
@@ -124,9 +130,13 @@ def uw_stat_costs(workdir):
         ifguw = run_snaphu(workdir,rowcost,colcost,ifgwght,ncol)
 
         ifg_diff1 = ifguw[:-1, :] - ifguw[1:, :]
+        ifg_diff1 = ifg_diff1.flatten(order='F')
         ifg_diff1 = ifg_diff1[ifg_diff1 != 0]
+
         ifg_diff2 = ifguw[:, :-1] - ifguw[:, 1:]
+        ifg_diff2 = ifg_diff2.flatten(order='F')
         ifg_diff2 = ifg_diff2[ifg_diff2 != 0]
+
         msd[i1] = (np.sum(ifg_diff1**2) + np.sum(ifg_diff2**2)) / (len(ifg_diff1) + len(ifg_diff2))
 
         ph_uw[:, i1] = ifguw.flatten(order='F')[nzix.flatten(order='F')]

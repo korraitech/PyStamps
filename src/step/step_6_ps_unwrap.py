@@ -187,8 +187,8 @@ def step_6_ps_unwrap(workdir:str,parms:dict):
     ph_uw_some, msd_some = uw_unwrap_from_grid(workdir)
     
     # Initialize output arrays
-    ph_uw = np.zeros((n_ps, n_ifg), dtype='float32')
-    msd = np.zeros(n_ifg, dtype='float32')
+    ph_uw = np.zeros((n_ps, n_ifg), dtype=np.float32)
+    msd = np.zeros(n_ifg, dtype=np.float32)
     
     # Assign unwrapped results
     ph_uw[:, unwrap_ifg_index] = ph_uw_some
