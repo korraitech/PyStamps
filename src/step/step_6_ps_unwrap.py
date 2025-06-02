@@ -2,11 +2,10 @@ import numpy as np
 import os
 from ..misc import get_module_info
 from ..logger import appLogger
-from .utils import read_h5,save_h5
+from .utils import read_h5,save_h5,dsearchn
 from .uw_grid_wrapped import uw_grid_wrapped
 from .uw_space_time import uw_space_time
 from .uw_stat_costs import uw_stat_costs
-from scipy.spatial import cKDTree
 
 def uw_interp(workdir:str):
     print('Interpolating grid...')
@@ -20,11 +19,12 @@ def uw_interp(workdir:str):
     X, Y = np.meshgrid(np.arange(1 ,ncol+1), np.arange(1,nrow+1))
     
     query_points = np.column_stack((X.flatten(order='F'), Y.flatten(order='F')))
-    _, Z = cKDTree(xy).query(query_points)
+    Z = dsearchn(xy, query_points) + 1
 
-    Zvec_col  = Z.reshape(nrow,ncol).flatten(order='F')
-    grid_edges = np.column_stack((Zvec_col[:-nrow],Zvec_col[nrow:]))
-    grid_edges = np.vstack((grid_edges, np.column_stack((Z[:-ncol], Z[ncol:]))))
+    col_edges = np.column_stack((Z[:-nrow], Z[nrow:]))
+    Zvec_row_major = np.reshape(Z, (nrow, ncol), order='F').flatten(order='C')
+    row_edges = np.column_stack((Zvec_row_major[:-ncol], Zvec_row_major[ncol:]))
+    grid_edges = np.vstack((col_edges, row_edges))
 
     sort_edges = np.sort(grid_edges, axis=1)
     I_sort = np.argsort(grid_edges, axis=1)
@@ -36,18 +36,18 @@ def uw_interp(workdir:str):
     
     edgs, J2 = np.unique(alledges, axis=0,return_inverse=True)
     n_edge = len(edgs) - 1
-    edgs = np.column_stack((np.arange(n_edge), edgs[1:]))
+    edgs = np.column_stack((np.arange(1,n_edge+1), edgs[1:]))
 
     gridedgeix = (J2[J]) * edge_sign
-    colix = gridedgeix[:nrow*(ncol-1)].reshape(nrow, ncol-1)
-    rowix = gridedgeix[nrow*(ncol-1):].reshape(ncol, nrow-1).T
+    colix = gridedgeix[:nrow*(ncol-1)].reshape(nrow, ncol-1,order='F')
+    rowix = gridedgeix[nrow*(ncol-1):].reshape(ncol, nrow-1,order='F').T
 
     print(f'   Number of unique edges in grid: {n_edge}')
     
     # Save the results
     save_h5(workdir,'uw_interp.h5',**{'edgs':edgs, 'n_edge':n_edge, 
                                       'rowix':rowix, 'colix':colix, 
-                                      'Z':Z.reshape(nrow,ncol)})
+                                      'Z':Z.reshape(nrow,ncol,order='F')})
 
 def uw_unwrap_from_grid(workdir:str):
     print('Unwrapping from grid...')

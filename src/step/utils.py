@@ -1,6 +1,7 @@
 import h5py as hp
 import numpy as np
 from scipy.signal.windows import gaussian
+from scipy.spatial import cKDTree
 import os
 
 def read_lines(path:str) -> list[str]:
@@ -69,6 +70,15 @@ def gaussian2D(w:int, alpha:float = 2.5):
     gaussian_1d = gaussian1D(w,alpha)
     return np.outer(gaussian_1d, gaussian_1d)
 
-def lscov(G, y, w):
+def lscov(G:np.ndarray, y:np.ndarray, w:np.ndarray):
     sqrt_w = np.sqrt(w)[:, np.newaxis]
     return np.linalg.lstsq(G * sqrt_w, y * sqrt_w)[0]
+
+def dsearchn(xy:np.ndarray, qp:np.ndarray, tie_tolerance:float=1e-10):
+    tree = cKDTree(xy)
+    distances, indices = tree.query(qp, k=min(len(xy), 10))
+    result_indices = []
+    for i in range(len(qp)):
+        tied_mask = np.abs(distances[i] - distances[i, 0]) <= tie_tolerance
+        result_indices.append(np.min(indices[i][tied_mask]))
+    return np.array(result_indices)
