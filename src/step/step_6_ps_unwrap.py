@@ -27,7 +27,7 @@ def uw_interp(workdir:str):
     grid_edges = np.vstack((col_edges, row_edges))
 
     sort_edges = np.sort(grid_edges, axis=1)
-    I_sort = np.argsort(grid_edges, axis=1)
+    I_sort = np.argsort(grid_edges, axis=1) + 1
     edge_sign = I_sort[:, 1] - I_sort[:, 0]
 
     alledges, J = np.unique(sort_edges, axis=0, return_inverse=True)
@@ -56,12 +56,12 @@ def uw_unwrap_from_grid(workdir:str):
     uu = read_h5(os.path.join(workdir,'uw_phaseuw.h5'))
 
     n_ps, n_ifg = uw['ph_in'].shape
-    gridix = np.zeros_like(uw['nzix'])
 
+    gridix = np.zeros(uw['nzix'].shape, dtype=int, order='F')
     gridix_flat = gridix.flatten(order='F')
     nzix_flat = uw['nzix'].flatten(order='F')
     gridix_flat[nzix_flat] = np.arange(1, uw['n_ps'] + 1)
-    gridix = gridix_flat.reshape(uw['nzix'].shape, order='F') 
+    gridix = gridix_flat.reshape(gridix.shape, order='F')
 
     ph_uw = np.zeros((n_ps, n_ifg), dtype=np.float32)
 

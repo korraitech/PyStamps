@@ -2,7 +2,7 @@ import numpy as np
 from .utils import read_h5,save_h5
 import os
 
-def run_snaphu(workdir,rowcost,colcost,ifgw,ncol):
+def run_snaphu(workdir,rowcost,colcost,ifgw,nrow,ncol):
     with open(os.path.join(workdir,'snaphu.costinfile'), 'wb') as fid:
         fid.write(rowcost.astype(np.int16).tobytes())
         fid.write(colcost.astype(np.int16).tobytes())
@@ -17,7 +17,7 @@ def run_snaphu(workdir,rowcost,colcost,ifgw,ncol):
     os.system(cmdstr)
 
     with open(os.path.join(workdir,'snaphu.out'), 'rb') as fid:
-        ifguw = np.fromfile(fid, dtype=np.float32).reshape(-1, ncol).T
+        ifguw = np.fromfile(fid, dtype=np.float32).reshape(nrow, ncol).T
     
     return ifguw
 
@@ -127,7 +127,7 @@ def uw_stat_costs(workdir):
 
         ifgwght = ph[Z - 1, i1].reshape(nrow, ncol, order='F')
 
-        ifguw = run_snaphu(workdir,rowcost,colcost,ifgwght,ncol)
+        ifguw = run_snaphu(workdir,rowcost,colcost,ifgwght,nrow,ncol)
 
         ifg_diff1 = ifguw[:-1, :] - ifguw[1:, :]
         ifg_diff1 = ifg_diff1.flatten(order='F')
@@ -139,7 +139,7 @@ def uw_stat_costs(workdir):
 
         msd[i1] = (np.sum(ifg_diff1**2) + np.sum(ifg_diff2**2)) / (len(ifg_diff1) + len(ifg_diff2))
 
-        ph_uw[:, i1] = ifguw.flatten(order='F')[nzix.flatten(order='F')]
+        ph_uw[:, i1] = ifguw[nzix.T]
 
     # Save results
     save_h5(workdir,"uw_phaseuw.h5",**{
