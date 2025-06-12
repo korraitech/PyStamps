@@ -1,4 +1,16 @@
-import numpy
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of calamp.                    #
+#                                                                       #
+#########################################################################
+
+
+import numpy as np
 from ..logger import appLogger
 from ..misc import get_module_info
 
@@ -23,20 +35,20 @@ def calculate_amplitude_calibration_chunked(file_path: str, chunk_size: int = 1_
         # Read until no more data
         while True:
             # Read chunk_size of complex64 samples (each sample is 8 bytes)
-            chunk = numpy.fromfile(f, dtype=numpy.complex64, count=chunk_size)
+            chunk = np.fromfile(f, dtype=np.complex64, count=chunk_size)
             if chunk.size == 0:
                 break
 
             # Swap (reverse) bytes if needed
-            data = numpy.array(chunk.byteswap())
+            data = np.array(chunk.byteswap())
 
             # Compute amplitudes
-            amplitudes = numpy.abs(data)
+            amplitudes = np.abs(data)
 
             # Filter
             valid_mask = amplitudes > 0.001
-            sum_amplitudes += numpy.sum(amplitudes[valid_mask])
-            valid_pixels += numpy.sum(valid_mask)
+            sum_amplitudes += np.sum(amplitudes[valid_mask])
+            valid_pixels += np.sum(valid_mask)
 
     if valid_pixels > 0:
         calibration_factor = sum_amplitudes / valid_pixels

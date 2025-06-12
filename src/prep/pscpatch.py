@@ -1,4 +1,16 @@
-import numpy
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of pscpatch.                  #
+#                                                                       #
+#########################################################################
+
+
+import numpy as np
 import h5py
 import struct
 from ..logger import appLogger
@@ -30,9 +42,8 @@ def process_patch_data_in_batches(
     coords: tuple[int, int, int, int],
     width: int,
     batch_lines: int = 1024
-) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Process patch data in batches using numpy.
     Instead of returning per-file amplitudes, we only return:
       1. The sum of amplitudes at each pixel.
       2. The sum of squared amplitudes at each pixel.
@@ -45,9 +56,9 @@ def process_patch_data_in_batches(
     num_files = len(amp_files)
 
     # Allocate CPU arrays for accumulations
-    sum_amp_cpu = numpy.zeros((patch_lines, patch_width), dtype=numpy.float32)
-    sum_amp_sq_cpu = numpy.zeros((patch_lines, patch_width), dtype=numpy.float32)
-    min_amp_cpu = numpy.full((patch_lines, patch_width), numpy.inf, dtype=numpy.float32)
+    sum_amp_cpu = np.zeros((patch_lines, patch_width), dtype=np.float32)
+    sum_amp_sq_cpu = np.zeros((patch_lines, patch_width), dtype=np.float32)
+    min_amp_cpu = np.full((patch_lines, patch_width), np.inf, dtype=np.float32)
 
     for i, (fname, calib) in enumerate(amp_files):
         # Read one file at a time, in smaller line-batches
@@ -68,25 +79,25 @@ def process_patch_data_in_batches(
                 lines_to_read = min(batch_lines, lines_remaining)
 
                 # Read the raw complex data for this batch
-                data_batch = numpy.zeros(
-                    (lines_to_read, patch_width), dtype=numpy.complex64
+                data_batch = np.zeros(
+                    (lines_to_read, patch_width), dtype=np.complex64
                 )
                 for line in range(lines_to_read):
-                    data_line = numpy.fromfile(f, dtype=numpy.complex64, count=patch_width)
+                    data_line = np.fromfile(f, dtype=np.complex64, count=patch_width)
                     data_batch[line] = data_line
                     # Skip remainder in the file
                     f.seek((width - patch_width) * 8, 1)
 
                 # Byte-swap if needed
-                data_batch = numpy.array(data_batch.byteswap())
+                data_batch = np.array(data_batch.byteswap())
 
                 # Calculate amplitude using numpy
-                amplitude = numpy.abs(data_batch) / calib
+                amplitude = np.abs(data_batch) / calib
 
                 # Update accumulations
                 sum_amp_cpu[start_line:start_line + lines_to_read] += amplitude
                 sum_amp_sq_cpu[start_line:start_line + lines_to_read] += amplitude ** 2
-                min_amp_cpu[start_line:start_line + lines_to_read] = numpy.minimum(
+                min_amp_cpu[start_line:start_line + lines_to_read] = np.minimum(
                     min_amp_cpu[start_line:start_line + lines_to_read],
                     amplitude
                 )
@@ -97,18 +108,18 @@ def process_patch_data_in_batches(
 
     # Now compute D_sq = num_files * (sum_amp_sq) / (sum_amp^2) - 1
     # Watch out for zeros in sum_amp
-    with numpy.errstate(divide="ignore", invalid="ignore"):
+    with np.errstate(divide="ignore", invalid="ignore"):
         D_sq_cpu = (num_files * sum_amp_sq_cpu) / (sum_amp_cpu ** 2) - 1
         # Where sum_amp_cpu == 0, set D_sq to a large positive number (or NaN -> just handle it)
-        D_sq_cpu[numpy.isnan(D_sq_cpu) | numpy.isinf(D_sq_cpu)] = 9999999
+        D_sq_cpu[np.isnan(D_sq_cpu) | np.isinf(D_sq_cpu)] = 9999999
 
     return min_amp_cpu, sum_amp_cpu, D_sq_cpu
 
 
 def find_ps_candidates_batched(
-    min_amp: numpy.ndarray,
-    sum_amp: numpy.ndarray, 
-    D_sq: numpy.ndarray, 
+    min_amp: np.ndarray,
+    sum_amp: np.ndarray, 
+    D_sq: np.ndarray, 
     D_thresh: float, 
     coords: tuple[int, int, int, int], 
     pscands_ij: str,
@@ -143,16 +154,16 @@ def find_ps_candidates_batched(
         ps_mask_flat = ps_mask.flatten()
         D_sq_flat = D_sq.flatten()
 
-        az_indices = numpy.arange(az_start, az_start + patch_lines)
-        rg_indices = numpy.arange(rg_start, rg_start + patch_width)
-        az_grid, rg_grid = numpy.meshgrid(az_indices, rg_indices, indexing='ij')
+        az_indices = np.arange(az_start, az_start + patch_lines)
+        rg_indices = np.arange(rg_start, rg_start + patch_width)
+        az_grid, rg_grid = np.meshgrid(az_indices, rg_indices, indexing='ij')
         az_flat = az_grid.flatten()
         rg_flat = rg_grid.flatten()
 
         # Flatten min_amp to replicate "if any amplitude <= 0.00005"
         min_amp_flat = min_amp.flatten()
 
-        valid_indices = numpy.where(ps_mask_flat)[0]
+        valid_indices = np.where(ps_mask_flat)[0]
 
         for idx in valid_indices:
             # check if min amplitude was below threshold => skip
@@ -161,7 +172,7 @@ def find_ps_candidates_batched(
             az_val = az_flat[idx]
             rg_val = rg_flat[idx]
             ij_data.append([pscid, az_val, rg_val])
-            daout_data.append(numpy.sqrt(D_sq_flat[idx]))
+            daout_data.append(np.sqrt(D_sq_flat[idx]))
             pscid += 1
             
         # Write out results
@@ -195,7 +206,7 @@ def run_pscpatch(
     pscands_ma: str
 ) -> None:
     """
-    Run the PSC patch process using only numpy.
+    Run the PSC patch process
     """
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "Start"))
 

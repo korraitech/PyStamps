@@ -1,3 +1,15 @@
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the caller of pystamps steps.                    #
+#                                                                       #
+#########################################################################
+
+
 import os
 import json
 from .env import POOL_SIZE

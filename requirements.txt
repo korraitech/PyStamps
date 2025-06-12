@@ -1,8 +1,5 @@
 # shaphu
+tqdm
 h5py
 scipy
-numba
-pandas
-geopandas
-matplotlib
 numpy

@@ -1,5 +1,17 @@
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of psclonlat.                 #
+#                                                                       #
+#########################################################################
+
+
 import h5py
-import numpy
+import numpy as np
 import struct
 import os
 from ..logger import appLogger
@@ -54,7 +66,7 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
             height = num_elems // width
             raw_bin = f.read(data_size)
             # Interpret big-endian float32, then swap to native (little-endian)
-            np_data = numpy.frombuffer(raw_bin, dtype=">f4").reshape(height, width)
+            np_data = np.frombuffer(raw_bin, dtype=">f4").reshape(height, width)
             np_data = np_data.byteswap().view(np_data.dtype.newbyteorder())
 
             # Store as NumPy array
@@ -63,11 +75,11 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
     # 3) Read the PSC candidates from pscands_ij (HDF5)
     #    We expect a dataset called 'data' with shape (N, 3): (index, y, x)
     with h5py.File(pscands_ij, "r") as ij_hdf:
-        ij_data = numpy.array(ij_hdf["data"])  # shape = (N, 3)
+        ij_data = np.array(ij_hdf["data"])  # shape = (N, 3)
 
     # Extract row/col indices
-    y_coords = ij_data[:, 1].astype(numpy.int64)
-    x_coords = ij_data[:, 2].astype(numpy.int64)
+    y_coords = ij_data[:, 1].astype(np.int64)
+    x_coords = ij_data[:, 2].astype(np.int64)
 
     num_points = len(ij_data)
     num_ifgs = len(ifg_arrays)
@@ -93,14 +105,14 @@ def run_psclonlat(patch_id: str, psclatlon_in: str, pscands_ij: str, pscands_ll:
             batch_x = x_coords[start_idx:end_idx]
 
             # Create batch result array
-            batch_result = numpy.empty((batch_size_actual, num_ifgs), dtype=numpy.float32)
+            batch_result = np.empty((batch_size_actual, num_ifgs), dtype=np.float32)
 
             # Gather for each ifg array
             for ifg_index, ifg_array in enumerate(ifg_arrays):
                 batch_result[:, ifg_index] = ifg_array[batch_y, batch_x]
 
             # Convert to float64 for writing
-            batch_np = batch_result.astype(numpy.float64)
+            batch_np = batch_result.astype(np.float64)
             ll_dataset[start_idx:end_idx, :] = batch_np
 
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "End"))

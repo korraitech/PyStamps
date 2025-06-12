@@ -1,5 +1,5 @@
 #########################################################################
-#   Copyright 2022 - 2025, KorrAI                                       #
+#   Copyright 2025 - 2025, KorrAI                                       #
 #   ALL RIGHTS RESERVED.                                                #
 #   This file is subject to the full copyright and disclaimer notice    #
 #   included in a separate file in this directory.                      #
@@ -9,18 +9,12 @@
 #                                                                       #
 #########################################################################
 
+
 import queue
 from logging.handlers import QueueHandler, QueueListener
 from datetime import datetime
 import logging
 import os
-
-logging.getLogger('boto3').setLevel(logging.CRITICAL)
-logging.getLogger('botocore').setLevel(logging.CRITICAL)
-logging.getLogger('urllib3').setLevel(logging.CRITICAL)
-logging.getLogger('matplotlib').setLevel(logging.CRITICAL)
-logging.getLogger('h5py').setLevel(logging.CRITICAL)
-logging.getLogger('google.cloud.storage').setLevel(logging.CRITICAL)
 
 # Setup queue
 loggerQueue = queue.Queue(-1)  # no limit on size

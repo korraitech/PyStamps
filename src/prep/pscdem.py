@@ -1,5 +1,17 @@
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of pscdem.                    #
+#                                                                       #
+#########################################################################
+
+
 import h5py
-import array
+from array import array
 from ..logger import appLogger
 from ..misc import get_module_info
 
@@ -92,7 +104,7 @@ def run_pscdem(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ht: str
                 break  # no more data to read
 
             # Convert buffer to float32 using array module
-            chunk_data = array.array('f')
+            chunk_data = array('f')
             chunk_data.frombytes(chunk_buffer)
             # Convert big-endian to native byte order if needed
             chunk_data.byteswap()  # IEEE 754 floats are big-endian in the file

@@ -1,9 +1,8 @@
-# UrbanSAR signature
-urbansar service using SNAP and STAMPS
+# pyStaMPS signature
+pystamps
 
-### How to run InSAR service.
-1. Update the params
-    This aoi is used to subset the scene.
+### How to run pystamps.
+1. Update the params in input.json
     ```
    {
     "Pstm": {
@@ -14,8 +13,8 @@ urbansar service using SNAP and STAMPS
         "APO": 200
     },
     "Prdt": "20231107",
-    "Pinp": "/Users/rvs/myspace/workspace/services/service-utils/manual-stamps/manual_stamps_v1/data/export",   # change the path to rslc exported folder
-    "Pout": "/Users/rvs/myspace/workspace/services/service-utils/manual-stamps/manual_stamps_v1/data/output"    # Ouput directory to process the path to rslc exported folder
+    "Pinp": "test/export",   # change the path to rslc exported folder
+    "Pout": "test/output"    # Ouput directory to process the path to rslc exported folder
     }
     ```
 3. Run the code
@@ -23,7 +22,8 @@ urbansar service using SNAP and STAMPS
     # Now run the  command
     python3 main.py
     ```
-
-
-
-wget https://korraicom-my.sharepoint.com/:u:/g/personal/rahul_sharan_korrai_com/EZNlyaVVCmRIlH8NKs1wvaAB5A88NyRtqfwAdDjMW6BP9w?download=1
+### How to run unit testcase.
+1. Extract the data stored in test folder.
+2. Then update the path in input.json accordingly
+3. Finally run the python main.py
+4. Output csv will be generated in Pout folder.

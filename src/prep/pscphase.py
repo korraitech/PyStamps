@@ -1,5 +1,16 @@
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of pscphase.                  #
+#                                                                       #
+#########################################################################
+
 import h5py
-import numpy
+import numpy as np
 import struct
 from ..logger import appLogger
 from ..misc import get_module_info
@@ -32,13 +43,13 @@ def run_pscphase(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ph: s
             "data",
             (num_points, len(ifg_filenames)),
             maxshape=(None, len(ifg_filenames)),
-            dtype=numpy.complex64,
+            dtype=np.complex64,
             chunks=True,
         )
 
         # Use NumPy arrays for coordinates
-        y_coords = y_coords.astype(numpy.int64)
-        x_coords = x_coords.astype(numpy.int64)
+        y_coords = y_coords.astype(np.int64)
+        x_coords = x_coords.astype(np.int64)
 
         # 4) Loop over each ifg_filename but process in batches to limit memory usage:
         for ifg_index, ifg_filename in enumerate(ifg_filenames):
@@ -49,7 +60,7 @@ def run_pscphase(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ph: s
                     ifgfile.seek(0)
 
                 # Read remainder of file as big-endian float32 data, then reshape to Nx2 for real/imag:
-                file_data = numpy.fromfile(ifgfile, dtype=">f4")  # big-endian float32
+                file_data = np.fromfile(ifgfile, dtype=">f4")  # big-endian float32
                 # Convert big-endian to native (little-endian on most machines)
                 file_data = file_data.astype("<f4")
 
@@ -73,7 +84,7 @@ def run_pscphase(patch_id: str, pscphase_in: str, pscands_ij: str, pscands_ph: s
                 # Convert to a complex64 array for writing
                 real_part = gathered[:, 0]
                 imag_part = gathered[:, 1]
-                temp_array = (real_part + 1j * imag_part).astype(numpy.complex64)
+                temp_array = (real_part + 1j * imag_part).astype(np.complex64)
 
                 # Write the extracted pixel array into the HDF5 dataset for this batch
                 ph_dataset[start:end, ifg_index] = temp_array

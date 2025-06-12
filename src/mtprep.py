@@ -1,24 +1,27 @@
-#!/usr/bin/env python
-# Interface between Snap and StaMPS
-#
-# Andy Hooper, August 2017
-# Rahul V Sharan, February 2024
-# Rahul V Sharan, December 2024
-# ===========================================================================
-# Updated code to parallelize cands using python script
-# ===========================================================================
-# Expected directory structure:
-# PS:
-#   rslc/*.rslc
-#   rslc/*.rslc.par
-#   diff0/*.diff
-#   diff0/*.base
-#   geo/*dem.rdc
-#   geo/*diff_par
-#   geo/YYYYMMDD.lon (master)
-#   geo/YYYYMMDD.lat (master)
-#   dem/*_seg.par
-# ===========================================================================
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of mtprep.                    #
+#                                                                       #
+#   Expected directory structure:                                       #
+#   PS:                                                                 #
+#       rslc/*.rslc                                                     #
+#       rslc/*.rslc.par                                                 #
+#       diff0/*.diff                                                    #
+#       diff0/*.base                                                    #
+#       geo/*dem.rdc                                                    #
+#       geo/*diff_par                                                   #
+#       geo/YYYYMMDD.lon (master)                                       #
+#       geo/YYYYMMDD.lat (master)                                       #
+#       dem/*_seg.par                                                   #
+#                                                                       #
+#########################################################################
+
+
 import os
 from .logger import appLogger
 from .prep.calamp import run_calamp

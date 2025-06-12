@@ -1,6 +1,18 @@
+#########################################################################
+#   Copyright 2025 - 2025, KorrAI                                       #
+#   ALL RIGHTS RESERVED.                                                #
+#   This file is subject to the full copyright and disclaimer notice    #
+#   included in a separate file in this directory.                      #
+#########################################################################
+#                                                                       #
+#   This file contains the implementation of default param.             #
+#                                                                       #
+#########################################################################
+
+
 import os
 import json
-import numpy
+import numpy as np
 from ..logger import appLogger
 from ..misc import get_module_info
 
@@ -29,7 +41,7 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
     parms.setdefault('percent_rand', 20)
     parms.setdefault('gamma_stdev_reject', 0)
     parms.setdefault('weed_time_win', 730)
-    parms.setdefault('weed_max_noise', numpy.inf)
+    parms.setdefault('weed_max_noise', np.inf)
     parms.setdefault('weed_standard_dev', 1.0)
     parms.setdefault('weed_zero_elevation', 'n')
     parms.setdefault('weed_neighbours', 'n')
@@ -50,10 +62,10 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
     parms.setdefault('scn_time_win', 365)
     parms.setdefault('scn_deramp_ifg', [])
     parms.setdefault('scn_kriging_flag', 'n')
-    parms.setdefault('ref_lon', [-numpy.inf, numpy.inf])
-    parms.setdefault('ref_lat', [-numpy.inf, numpy.inf])
+    parms.setdefault('ref_lon', [-np.inf, np.inf])
+    parms.setdefault('ref_lat', [-np.inf, np.inf])
     parms.setdefault('ref_centre_lonlat', [0, 0])
-    parms.setdefault('ref_radius', numpy.inf)
+    parms.setdefault('ref_radius', np.inf)
     parms.setdefault('ref_velocity', 0)
     parms.setdefault('n_cores', 1)
     parms.setdefault('plot_dem_posting', 90)
@@ -63,11 +75,11 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
     parms.setdefault('shade_rel_angle', [90, 45])
     parms.setdefault('lonlat_offset', [0, 0])
     parms.setdefault('merge_resample_size', 0)
-    parms.setdefault('merge_standard_dev', numpy.inf)
+    parms.setdefault('merge_standard_dev', np.inf)
     parms.setdefault('scla_method', 'L2')
     parms.setdefault('scla_deramp', 'y')
-    parms.setdefault('lambda', numpy.nan)
-    parms.setdefault('heading', numpy.nan)
+    parms.setdefault('lambda', np.nan)
+    parms.setdefault('heading', np.nan)
     parms.setdefault('sb_scla_drop_index', [])
     parms.setdefault('insar_processor', 'doris')
     parms.setdefault('subtr_tropo', 'n')
@@ -75,9 +87,9 @@ def ps_parms_init(workdir:str, rslc_par:dict, parmfile:str = 'parms.json'):
 
     # Convert numpy types to native Python types for JSON serialization
     for key, value in parms.items():
-        if isinstance(value, numpy.ndarray):
+        if isinstance(value, np.ndarray):
             parms[key] = value.tolist()
-        elif isinstance(value, numpy.generic):
+        elif isinstance(value, np.generic):
             parms[key] = value.item()
 
     # update parms with kwargs

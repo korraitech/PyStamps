@@ -1,7 +1,0 @@
-bin/
-data/
-*.log
-.DS_Store
-*.pyc
-launch.json
-etc/
