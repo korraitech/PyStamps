@@ -4,8 +4,9 @@ from ..misc import get_module_info
 from ..logger import appLogger
 from .utils import read_h5,save_h5
 
-def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
-                        select_method,max_percent_rand,min_coh,low_coh_thresh) ->float:
+def calculate_threshold(D_A,D_A_max,pm,Nr_dist,select_method,max_percent_rand,low_coh_thresh) -> tuple:
+    min_coh = np.zeros(len(D_A_max) - 1)
+    D_A_mean = np.zeros(D_A_max.shape[0] - 1)
     for i in range(len(D_A_max)-1):
         mask = (D_A > D_A_max[i]) & (D_A <= D_A_max[i+1])
         coh_chunk = pm['coh_ps'][mask]
@@ -38,7 +39,7 @@ def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
                     max_fit_ix = 100
                 
                 x_vals = percent_rand[min_fit_ix:max_fit_ix+1]
-                y_vals = np.arange(min_fit_ix * 0.01, (max_fit_ix + 1) * 0.01, 0.01)
+                y_vals = np.arange(min_fit_ix, max_fit_ix + 1) * 0.01
                 
                 p = np.polyfit(x_vals, y_vals, 3)
                 min_coh[i] = np.polyval(p, max_percent_rand)
@@ -47,7 +48,7 @@ def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
     coh_thresh_coeffs = []
     if np.sum(nonnanix) < 1:
         print('Not enough random phase pixels to set gamma threshold - using default threshold of 0.3')
-        coh_thresh = 0.3
+        coh_thresh = np.full(pm['coh_ps'].shape[0], 0.3)
     else:
         min_coh_filtered = min_coh[nonnanix]
         D_A_mean_filtered = D_A_mean[nonnanix]
@@ -60,10 +61,11 @@ def calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
                 coh_thresh = np.polyval(coh_thresh_coeffs, 0.35)
                 coh_thresh_coeffs = []
         else:
-            coh_thresh = min_coh_filtered
+            coh_thresh = np.full(pm['coh_ps'].shape[0], min_coh_filtered)
             coh_thresh_coeffs = []
     
-    return np.maximum(coh_thresh, 0), coh_thresh_coeffs
+    coh_thresh[coh_thresh<0] = 0
+    return (coh_thresh, coh_thresh_coeffs)
 
 def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
     """
@@ -134,9 +136,7 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
             bin_size = 10000
         else:
             bin_size = 2000
-        
-        indices = np.arange(bin_size-1, len(D_A_sort)-bin_size, bin_size)
-        D_A_max = np.concatenate(([0], D_A_sort[indices], [D_A_sort[-1]]))
+        D_A_max = np.concatenate([[0], D_A_sort[bin_size-1::bin_size][:-1],[D_A_sort[-1]]])
     else:
         D_A_max = np.array([0, 1])
         D_A = np.ones_like(pm['coh_ps'])
@@ -145,16 +145,19 @@ def step_3_ps_select(workdir:str,patch:str,parms:dict) -> None:
         patch_area = np.prod(np.max(xy[:, 1:3], axis=0) - np.min(xy[:, 1:3], axis=0)) / 1e6
         max_percent_rand = max_density_rand * patch_area / (len(D_A_max) - 1)
 
-    min_coh = np.zeros(len(D_A_max) - 1)
-    D_A_mean = np.zeros(D_A_max.shape[0] - 1)
     Nr_dist = pm['Nr']
 
-    coh_thresh,coh_thresh_coeffs = calculate_threshold(D_A,D_A_max,D_A_mean,pm,Nr_dist,
-                    select_method,max_percent_rand,min_coh,low_coh_thresh)
+    coh_thresh,coh_thresh_coeffs = calculate_threshold(D_A,D_A_max,pm,Nr_dist,
+                    select_method,max_percent_rand,low_coh_thresh)
     
     print(f'Initial gamma threshold: {np.min(coh_thresh):.3f} at D_A={np.min(D_A):.2f} to {np.max(coh_thresh):.3f} at D_A={np.max(D_A):.2f}')
 
-    ix = np.where(pm['coh_ps'] > coh_thresh)[0]
+    ix = []
+    for i in range(len(coh_thresh)):
+        if pm['coh_ps'][i] > coh_thresh[i]:
+            ix.append(i)
+    
+    ix = np.array(ix)
     n_ps = len(ix)
     print(f'{n_ps} PS selected initially')
 

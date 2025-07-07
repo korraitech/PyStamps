@@ -30,7 +30,6 @@ from .prep.psclonlat import run_psclonlat
 from .prep.pscdem import run_pscdem
 from .prep.pscphase import run_pscphase
 from .prep.parminit import ps_parms_init
-from .env import POOL_SIZE
 from .misc import get_module_info
 from multiprocessing import get_context
 
@@ -103,14 +102,12 @@ def task_cands(params):
     patchdir = os.path.join(workdir,params["patch"])
     pscands_ij = os.path.join(patchdir,'pscands_ij.h5')
     pscands_da = os.path.join(patchdir,'pscands_da.h5')
-    pscands_ma = os.path.join(patchdir,'pscands_ma.h5')
     
     run_pscpatch(params["patch"],
         os.path.join(workdir,'selpsc.in'),
         os.path.join(patchdir,'patch.in'),
         pscands_ij,
-        pscands_da,
-        pscands_ma)
+        pscands_da)
     
     run_psclonlat(params["patch"],
         os.path.join(workdir,'psclonlat.in'),
@@ -127,7 +124,7 @@ def task_cands(params):
 def mt_prep(master:str,datadir:str,workdir:str,da_thresh:float=0.4,
               prg:int=2, paz:int=2, overlap_rg:int= 50,overlap_az:int =200):
     appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| Start {} {} {} {} {} {} {} {}".format(get_module_info(),
-         master,datadir,workdir,da_thresh,prg,paz,overlap_rg,overlap_az)                                                                  )
+         master,datadir,workdir,da_thresh,prg,paz,overlap_rg,overlap_az))
     
     rsc = find_file(datadir,"rslc",f"{master}.rslc.par")
     
@@ -159,9 +156,8 @@ def mt_prep(master:str,datadir:str,workdir:str,da_thresh:float=0.4,
     for patch in patch_list:
         task_param.append({"workdir": workdir,"patch": patch})
     
-    #task_cands(task_param[0])
     ctx = get_context('spawn')
-    with ctx.Pool(processes=POOL_SIZE) as pool:
+    with ctx.Pool(processes=prg*paz) as pool:
         pool.map(task_cands, task_param)
 
     rslc_par = {
@@ -169,4 +165,4 @@ def mt_prep(master:str,datadir:str,workdir:str,da_thresh:float=0.4,
         "lambda" : SPEED_OF_LIGHT/float(rsc_data["radar_frequency"].replace('#','').replace('Hz',''))
     }
     ps_parms_init(workdir=workdir, rslc_par=rslc_par)
-    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| End ".format(get_module_info())                                                                  )
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| End ".format(get_module_info()))

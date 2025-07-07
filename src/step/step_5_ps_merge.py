@@ -154,6 +154,10 @@ def step_5_ps_merge(workdir:str,parms:dict):
             (ps['ij'][:, 2] >= patch_ij[0] - 1) & 
             (ps['ij'][:, 2] <= patch_ij[1] - 1))
 
+        if len(ix) == 0:
+            print("No PS left afer removing overlapping patches")
+            continue
+
         IA, IB = intersect_rows(ps['ij'][ix, 1:3], ij)
         remove_ix = np.concatenate([remove_ix, IB])
         IA, IB = intersect_rows(ps['ij'][:,1:3], ij)
@@ -194,11 +198,11 @@ def step_5_ps_merge(workdir:str,parms:dict):
         
         if os.path.exists(os.path.join(workdir,patch, laname)):
             lain = read_h5(os.path.join(workdir,patch, laname))
-            la = np.vstack(lain['la'][ix]) if la.size == 0 else np.vstack([la, lain['la'][ix]])
+            la = lain['la'][ix] if la.size == 0 else np.concatenate([la, lain['la'][ix]])
 
         if os.path.exists(os.path.join(workdir,patch, hgtname)):
             hgtin = read_h5(os.path.join(workdir,patch, hgtname))
-            hgt = np.vstack(hgtin['hgt'][ix]) if hgt.size == 0 else np.vstack([hgt, hgtin['hgt'][ix]])
+            hgt = hgtin['hgt'][ix] if hgt.size == 0 else np.concatenate([hgt, hgtin['hgt'][ix]])
 
     # Loop Ended through patch directories
     
@@ -278,10 +282,10 @@ def step_5_ps_merge(workdir:str,parms:dict):
     ph = ph[sort_ix, :] if ph.shape[0] == n_ps_orig else np.array([])
     save_h5(workdir, phname , **{'ph': ph})
     
-    la = la[sort_ix, :] if la.shape[0] == n_ps_orig else np.array([])
+    la = la[sort_ix] if la.shape[0] == n_ps_orig else np.array([])
     save_h5(workdir, laname , **{'la': la})
     
-    hgt = hgt[sort_ix, :] if hgt.shape[0] == n_ps_orig else np.array([])
+    hgt = hgt[sort_ix] if hgt.shape[0] == n_ps_orig else np.array([])
     save_h5(workdir, hgtname , **{'hgt': hgt})
 
     bperp_mat = bperp_mat[sort_ix, :]

@@ -123,8 +123,7 @@ def find_ps_candidates_batched(
     D_thresh: float, 
     coords: tuple[int, int, int, int], 
     pscands_ij: str,
-    pscands_da: str,
-    pscands_ma: str
+    pscands_da: str
 ) -> None:
     """
     Identify PS candidates and write results to HDF5, using:
@@ -148,8 +147,7 @@ def find_ps_candidates_batched(
 
     # Create separate HDF5 files for each dataset
     with h5py.File(pscands_ij, 'w') as ij_hdf, \
-         h5py.File(pscands_da, 'w') as da_hdf, \
-         h5py.File(pscands_ma, 'w') as ma_hdf:
+         h5py.File(pscands_da, 'w') as da_hdf:
 
         ps_mask_flat = ps_mask.flatten()
         D_sq_flat = D_sq.flatten()
@@ -176,12 +174,6 @@ def find_ps_candidates_batched(
             pscid += 1
             
         # Write out results
-        ma_dataset = ma_hdf.create_dataset(
-            'data', (patch_lines, patch_width),
-            dtype='f', chunks=True
-        )
-        ma_dataset[:, :] = sum_amp
-
         ij_dataset = ij_hdf.create_dataset(
             'data', (len(ij_data), 3),
             maxshape=(None, 3),
@@ -202,8 +194,7 @@ def run_pscpatch(
     selpsc_in: str, 
     patch_in: str,
     pscands_ij: str,
-    pscands_da: str,
-    pscands_ma: str
+    pscands_da: str
 ) -> None:
     """
     Run the PSC patch process
@@ -220,7 +211,7 @@ def run_pscpatch(
 
     # Find PS candidates using the aggregated results
     find_ps_candidates_batched(
-        min_amp, sum_amp, D_sq, D_thresh, coords,
-        pscands_ij, pscands_da, pscands_ma
+        min_amp, sum_amp, D_sq, D_thresh, 
+        coords, pscands_ij, pscands_da
     )
     appLogger.info(">>>>>>>>>>>>>>>> {} || {} {}".format(get_module_info(),patch_id, "End"))

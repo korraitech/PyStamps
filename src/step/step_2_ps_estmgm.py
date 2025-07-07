@@ -113,7 +113,7 @@ def step_2_ps_estmgm(workdir:str,patch:str,parms:dict) -> None:
     np.random.seed(2005)
     rand_ifg = (2.0 * np.pi * np.random.rand(n_ifg, n_rand)).T
     coh_rand = np.zeros(n_rand, dtype=np.float32)
-    for i in tqdm(range(n_rand)):
+    for i in tqdm(range(n_rand),desc="Running ps_topofit"):
         K_r, C_r, coh_r, phase_residual = ps_topofit(np.exp(1j * rand_ifg[i, :]), bperp, n_trial_wraps)
         coh_rand[i] = coh_r
 
@@ -138,10 +138,6 @@ def step_2_ps_estmgm(workdir:str,patch:str,parms:dict) -> None:
     n_j = np.max(grid_ij[:, 1]) + 1
 
     print(f'{n_ps} PS candidates to process')
-
-    # Assumption that already sorted in ascending order of column 3 (y-axis)
-    xy = np.zeros((n_ps, 1))
-    xy[:, 0] = np.arange(1, n_ps + 1)
 
     K_ps = np.zeros((n_ps, 1))
     C_ps = np.zeros((n_ps, 1))

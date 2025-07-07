@@ -65,13 +65,14 @@ def uw_unwrap_from_grid(workdir:str):
 
     ph_uw = np.zeros((n_ps, n_ifg), dtype=np.float32)
 
+    is_phin_real = np.isrealobj(uw['ph_in'])
     for i in range(n_ps):
         ix = gridix[uw['grid_ij'][i, 0]-1, uw['grid_ij'][i, 1]-1]
         if ix == 0:
             ph_uw[i, :] = np.nan  # wrapped phase values were zero
         else:
             ph_uw_pix = uu['ph_uw'][ix-1, :]
-            if np.all(np.imag(uw['ph_in']) == 0):
+            if is_phin_real:
                 ph_uw[i, :] = ph_uw_pix + np.angle(np.exp(1j * (uw['ph_in'][i, :] - ph_uw_pix)))
             else:
                 ph_uw[i, :] = ph_uw_pix + np.angle(uw['ph_in'][i, :] * np.exp(-1j * ph_uw_pix))

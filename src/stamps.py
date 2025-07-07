@@ -15,6 +15,8 @@ from .mtprep import mt_prep
 from .steps import run_stamps_steps
 from .step.utils import read_h5
 from datetime import datetime
+from tqdm import tqdm
+import numpy as np
 import csv
 import os
 
@@ -50,7 +52,7 @@ class Stamps():
         )
 
         # RUN stamps steps
-        run_stamps_steps(self.__PARAM_OUT)
+        run_stamps_steps(self.__PARAM_OUT,self.__PARAM_STM["NRP"],self.__PARAM_STM["NAP"])
 
     def __hdf5_to_csv(self):
         appLogger.info(">>>>>>>>>>>>>>>> {}::{}".format(
@@ -62,10 +64,14 @@ class Stamps():
                     newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(header)
-            for i, ll in enumerate(ps_data['lonlat']):
-                row = [ll[0],ll[1],i,float(ps_data['coh_ps'][i]),float(ps_data['ph_disp'][i])]
-                row += [ps_data['ph_mm'][i][j] for j in range(len(ps_data['ph_mm'][i]))]
-                writer.writerow(row)
+            lonlat = np.array(ps_data['lonlat'])
+            coh_ps = np.array(ps_data['coh_ps'], dtype=float)
+            ph_disp = np.round(np.array(ps_data['ph_disp'], dtype=float), 7)
+            ph_mm = np.round(np.array(ps_data['ph_mm'], dtype=float), 7)
+            indices = np.arange(len(lonlat)).reshape(-1, 1)
+            data = np.hstack((lonlat, indices, coh_ps.reshape(-1, 1), ph_disp.reshape(-1, 1), ph_mm))
+            for row in tqdm(data):
+                writer.writerow(row.tolist())
 
 
     def start(self) -> None:

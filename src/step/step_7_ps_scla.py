@@ -48,7 +48,7 @@ def smooth_scla(workdir:str):
         Cneigh_min[ix] = np.minimum(Cneigh_min[ix], C_ps_uw[ix[::-1]])
         Cneigh_max[ix] = np.maximum(Cneigh_max[ix], C_ps_uw[ix[::-1]])
         if i % 100000 == 0:
-            print(f'{i} arcs processed', 2)
+            print(f'{i} arcs processed of {n_edge}')
 
     ix1 = K_ps_uw > Kneigh_max
     ix2 = K_ps_uw < Kneigh_min

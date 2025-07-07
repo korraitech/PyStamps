@@ -13,4 +13,3 @@
 # Path where users data stored
 
 STAMPS_CPU  = 4
-POOL_SIZE   = 1

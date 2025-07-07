@@ -116,9 +116,13 @@ def uw_grid_wrapped(workdir, ph_in, xy_in, options):
 
     ph_grid = np.zeros((n_i, n_j), dtype=np.complex64)
 
-    if min(n_i, n_j) < prefilt_win:
-        raise ValueError(f'Minimum dimension of the resampled grid ({min(n_i, n_j)} pixels) '
+    m_prefilt_win = min(n_i, n_j)
+    if m_prefilt_win < prefilt_win:
+        print(f'Minimum dimension of the resampled grid ({m_prefilt_win} pixels) '
                         f'is less than prefilter window size ({prefilt_win})')
+        print(f'Updating {prefilt_win} to {m_prefilt_win}')
+        prefilt_win = m_prefilt_win
+
     for i1 in range(n_ifg):
         if np.isreal(ph_in).all():
             ph_this = np.exp(1j * ph_in[:, i1])

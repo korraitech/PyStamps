@@ -1,5 +1,4 @@
-import numpy
-import h5py
+import numpy as np
 import os
 from datetime import datetime,timezone
 from .llh2local import llh2local
@@ -43,7 +42,7 @@ def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
     n_image = n_ifg
     
     # Convert dates to datetime objects
-    date_strings = numpy.array([ifg for ifg in ifgs], dtype='<U100')
+    date_strings = np.array([ifg for ifg in ifgs], dtype='<U100')
     years = [int(s[nb - 13 : nb - 9]) for s in date_strings]
     months = [int(s[nb - 9 : nb - 7]) for s in date_strings]
     days = [int(s[nb - 7: nb - 5]) for s in date_strings]
@@ -82,25 +81,25 @@ def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
     
     mean_az = naz / 2 - 0.5
     rg = rgn + ij[:, 2] * rps
-    look = numpy.arccos((se**2 + rg**2 - re**2) / (2 * se * rg))
+    look = np.arccos((se**2 + rg**2 - re**2) / (2 * se * rg))
     
-    bperp_mat = numpy.empty((n_ps, n_ifg), dtype=numpy.float64)
+    bperp_mat = np.empty((n_ps, n_ifg), dtype=np.float64)
     for i in range(n_ifg):
         base_path = f"{ifgs[i][:nb-4]}base"
         base_param = get_par(base_path)
         bc=float(base_param["initial_baseline(TCN)"][1]) + float(base_param["initial_baseline_rate"][1])*(ij[:,1]-mean_az)/prf
         bn=float(base_param["initial_baseline(TCN)"][2]) + float(base_param["initial_baseline_rate"][2])*(ij[:,1]-mean_az)/prf
-        bperp_mat[:,i]=bc*numpy.cos(look)-bn*numpy.sin(look)
+        bperp_mat[:,i]=bc*np.cos(look)-bn*np.sin(look)
 
-    bperp = numpy.mean(bperp_mat, axis=0)
+    bperp = np.nanmean(bperp_mat, axis=0)
     if master_master_flag == '1':
-        bperp_mat = numpy.delete(bperp_mat, master_ix, axis=1)
+        bperp_mat = np.delete(bperp_mat, master_ix, axis=1)
     else:
-        bperp = numpy.insert(bperp, master_ix, 0)
+        bperp = np.insert(bperp, master_ix, 0)
     
     # Calculate incidence angles in parallel
-    inci = numpy.arccos((se**2 - re**2 - rg**2) / (2 * re * rg))
-    mean_incidence = numpy.mean(inci)
+    inci = np.arccos((se**2 - re**2 - rg**2) / (2 * re * rg))
+    mean_incidence = np.nanmean(inci)
     mean_range = rgc
     
     # Read phase data
@@ -108,77 +107,76 @@ def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
     if master_master_flag == '1':
         ph[:, master_ix] = 1
     else:
-        ph = numpy.insert(ph, master_ix, numpy.ones(n_ps), axis=1)
+        ph = np.insert(ph, master_ix, np.ones(n_ps), axis=1)
         n_ifg += 1
         n_image += 1
     
     # Read lon/lat data
     lonlat = read_h5(llpath)["data"]
-    
+
     # Calculate center point
-    ll0 = (numpy.max(lonlat, axis=0) + numpy.min(lonlat, axis=0)) / 2
+    ll0 = (np.nanmax(lonlat, axis=0) + np.nanmin(lonlat, axis=0)) / 2
     
     # Convert to local coordinates
     xy = llh2local(lonlat.T, ll0).T * 1000
     
     # Rotate coordinates
-    theta = (180 - heading) * numpy.pi / 180
-    if theta > numpy.pi:
-        theta -= 2 * numpy.pi
+    theta = (180 - heading) * np.pi / 180
+    if theta > np.pi:
+        theta -= 2 * np.pi
     
-    rotm = numpy.array([
-        [numpy.cos(theta), numpy.sin(theta)],
-        [-numpy.sin(theta), numpy.cos(theta)]
+    rotm = np.array([
+        [np.cos(theta), np.sin(theta)],
+        [-np.sin(theta), np.cos(theta)]
     ])
     
     xy_trans = xy.T
     xynew = rotm @ xy_trans
     
     # Check rotation improvement
-    if ((numpy.max(xynew[0]) - numpy.min(xynew[0]) <
-         numpy.max(xy_trans[0]) - numpy.min(xy_trans[0])) and
-        (numpy.max(xynew[1]) - numpy.min(xynew[1]) <
-         numpy.max(xy_trans[1]) - numpy.min(xy_trans[1]))):
+    if ((np.nanmax(xynew[0]) - np.nanmin(xynew[0]) <
+         np.nanmax(xy_trans[0]) - np.nanmin(xy_trans[0])) and
+        (np.nanmax(xynew[1]) - np.nanmin(xynew[1]) <
+         np.nanmax(xy_trans[1]) - np.nanmin(xy_trans[1]))):
         xy = xynew.T
-        print(f'Rotating by {theta * 180/numpy.pi} degrees')
+        print(f'Rotating by {theta * 180/np.pi} degrees')
     else:
         xy = xy_trans.T
     
     # Convert to single precision and round
-    xy = xy.astype(numpy.float32)
-    sort_ix = numpy.lexsort((xy[:, 0], xy[:, 1]))
+    sort_ix = np.lexsort((xy[:, 0], xy[:, 1]))
     xy = xy[sort_ix]
-    xy = numpy.round(xy * 1000) / 1000
-    
-    # Add index column
-    xy = numpy.column_stack((numpy.arange(1, n_ps + 1), xy))
-    
+    xy = np.round(xy * 1000) / 1000
+
     # Sort other arrays accordingly
     ph = ph[sort_ix]
     ij = ij[sort_ix]
-    ij[:, 0] = numpy.arange(1, n_ps + 1)
+    inci = inci[sort_ix]
     lonlat = lonlat[sort_ix]
     bperp_mat = bperp_mat[sort_ix]
-    
-    # Remove NaN values if present
-    ix_nan = numpy.any(numpy.isnan(lonlat), axis=1) | numpy.any(numpy.isnan(ph), axis=1)
+
+    # Find the inds where nan is present
+    ix_nan = np.any(np.isnan(lonlat), axis=1) | np.any(np.isnan(ph), axis=1)
+
     lonlat = lonlat[~ix_nan]
     ij = ij[~ix_nan]
     xy = xy[~ix_nan]
+    ph = ph[~ix_nan]
+    la = inci[~ix_nan]
+    bperp_mat = bperp_mat[~ix_nan]
     n_ps = len(lonlat)
-    
+
     # Update indices
-    ij[:, 0] = numpy.arange(n_ps)
-    xy[:, 0] = numpy.arange(n_ps)
+    ij[:, 0] = np.arange(n_ps)
+    xy = np.column_stack((np.arange(n_ps), xy))
 
     psver = 1
-    with h5py.File(os.path.join(patch_dir, 'psver.h5'), 'w') as f:
-        f.create_dataset('psver', data=psver)
+    save_h5(patch_dir,'psver.h5',**{'psver':psver})
     
     # Save results
     psname = f'ps{psver}.h5'
-    day = numpy.array([int(d.timestamp()/86400) for d in days])
-    master_day = numpy.array([int(master_date.timestamp()/86400)])
+    day = np.array([int(d.timestamp()/86400) for d in days])
+    master_day = np.array([int(master_date.timestamp()/86400)])
     
     save_h5(
         patch_dir, psname,
@@ -192,8 +190,8 @@ def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
             "master_ix": master_ix,
             "n_ifg": n_ifg,
             "n_image": n_image,
-            "n_ps": n_ps,
             "sort_ix": sort_ix,
+            "n_ps": n_ps,
             "ll0": ll0,
             "master_ix": master_ix,
             "mean_incidence": mean_incidence,
@@ -203,18 +201,14 @@ def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
     
     # Save phase data
     phname = f'ph{psver}.h5'
-    ph = ph[~ix_nan]
     save_h5(patch_dir, phname, **{"ph": ph})
     
     # Save baseline data
     bpname = f'bp{psver}.h5'
-    bperp_mat = bperp_mat[~ix_nan]
     save_h5(patch_dir, bpname, **{"bperp_mat": bperp_mat})
     
     # Save look angle data
     laname = f'la{psver}.h5'
-    la = inci[sort_ix]
-    la = la[~ix_nan]
     save_h5(patch_dir, laname, **{"la": la})
     
     # Save D_A if exists

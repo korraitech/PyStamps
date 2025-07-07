@@ -70,8 +70,6 @@ def uw_stat_costs(workdir):
     colcost = np.zeros((nrow, (ncol-1)*4), dtype=np.int16)
     nzrowix = np.abs(rowix) > 0
     nzcolix = np.abs(colix) > 0
-    rowstdgrid = np.ones(rowix.shape, dtype=np.int16)
-    colstdgrid = np.ones(colix.shape, dtype=np.int16)
     rowcost[:, 2::4] = maxshort
     colcost[:, 2::4] = maxshort
     stats_ix = ~np.isnan(rowix)
@@ -92,41 +90,33 @@ def uw_stat_costs(workdir):
         fid.write('INFILEFORMAT  COMPLEX_DATA\n')
         fid.write('OUTFILEFORMAT FLOAT_DATA\n')
 
+    rowstdgrid = np.ones(rowix.shape, dtype=np.int16)
+    colstdgrid = np.ones(colix.shape, dtype=np.int16)
     # Process each interferogram
     for i1 in subset_ifg_index:
         print(f'   Processing IFG {i1+1} of {len(subset_ifg_index)}')
 
-        nzrowix_flat = nzrowix.flatten('F')
-        nzcolix_flat = nzcolix.flatten('F')
-        rowidx_flat = rowix.flatten('F')[nzrowix_flat]
-        colidx_flat = colix.flatten('F')[nzcolix_flat]
-
-        rowstdgrid_flat = rowstdgrid.flatten('F')
-        rowstdgrid_flat[nzrowix_flat] = sigsq[np.abs(rowidx_flat).astype(np.int16)-1]
-        rowstdgrid = rowstdgrid_flat.reshape(rowstdgrid.shape, order='F')
+        #rowstdgrid = np.ones_like(rowix)
+        rowstdgrid[nzrowix] = sigsq[np.abs(rowix[nzrowix]).astype(int) - 1]
         rowcost[:, 1::4] = rowstdgrid
 
-        colstdgrid_flat = colstdgrid.flatten('F')
-        colstdgrid_flat[nzcolix_flat] = sigsq[np.abs(colidx_flat).astype(np.int16)-1]
-        colstdgrid = colstdgrid_flat.reshape(colstdgrid.shape, order='F')
+        #colstdgrid = np.ones_like(colix)
+        colstdgrid[nzcolix] = sigsq[np.abs(colix[nzcolix]).astype(int) - 1]
         colcost[:, 1::4] = colstdgrid
 
         offset_cycle = (np.angle(np.exp(1j * dph_space_uw[:, i1])) - dph_smooth[:, i1]) / (2 * np.pi)
 
-        offgrid = np.zeros(rowix.shape, dtype=np.int16)
-        offgrid_flat = offgrid.flatten('F')
-        offgrid_flat[nzrowix_flat] = np.round(offset_cycle[np.abs(rowidx_flat).astype(np.int16) -1] * np.sign(rowidx_flat) * nshortcycle).astype(np.int16)
-        offgrid = offgrid_flat.reshape(offgrid.shape, order='F')
+        offgrid = np.zeros_like(rowix, dtype=np.int16)
+        offgrid[nzrowix] = np.round(offset_cycle[np.abs(rowix[nzrowix]).astype(int) - 1] * np.sign(rowix[nzrowix]) * nshortcycle).astype(np.int16)
         rowcost[:, 0::4] = -offgrid
 
-        offgrid = np.zeros(colix.shape, dtype=np.int16)
-        offgrid_flat = offgrid.flatten('F')
-        offgrid_flat[nzcolix_flat] = np.round(offset_cycle[np.abs(colidx_flat).astype(np.int16) -1] * np.sign(colidx_flat) * nshortcycle).astype(np.int16)
-        offgrid = offgrid_flat.reshape(offgrid.shape, order='F')
+        # Column offset grid calculation
+        offgrid = np.zeros_like(colix, dtype=np.int16)
+        offgrid[nzcolix] = np.round(offset_cycle[np.abs(colix[nzcolix]).astype(int) - 1] * np.sign(colix[nzcolix]) * nshortcycle).astype(np.int16)
         colcost[:, 0::4] = offgrid
 
         ifgwght = ph[Z - 1, i1].reshape(nrow, ncol, order='F')
-
+        ifgwght = ifgwght.view(dtype=np.complex64).squeeze()
         ifguw = run_snaphu(workdir,rowcost,colcost,ifgwght,nrow,ncol)
 
         ifg_diff1 = ifguw[:-1, :] - ifguw[1:, :]
@@ -138,8 +128,7 @@ def uw_stat_costs(workdir):
         ifg_diff2 = ifg_diff2[ifg_diff2 != 0]
 
         msd[i1] = (np.sum(ifg_diff1**2) + np.sum(ifg_diff2**2)) / (len(ifg_diff1) + len(ifg_diff2))
-
-        ph_uw[:, i1] = ifguw[nzix.T]
+        ph_uw[:, i1] = ifguw[nzix.T.astype(bool)]
 
     # Save results
     save_h5(workdir,"uw_phaseuw.h5",**{

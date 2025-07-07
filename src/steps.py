@@ -12,7 +12,6 @@
 
 import os
 import json
-from .env import POOL_SIZE
 from .step.utils import read_lines
 from .step.step_1_ps_loadgm import step_1_ps_loadgm
 from .step.step_2_ps_estmgm import step_2_ps_estmgm
@@ -23,7 +22,7 @@ from .step.step_6_ps_unwrap import step_6_ps_unwrap
 from .step.step_aps_linear import step_aps_linear
 from .step.step_7_ps_scla import step_7_ps_scla
 from .step.step_8_ps_plot import step_8_ps_plot
-from multiprocessing.pool import ThreadPool
+from multiprocessing import Pool
 
 def read_json(path:str):
     data = {}
@@ -40,7 +39,7 @@ def patch_task(parmas:dict):
     step_3_ps_select(workdir,patch,parms)
     step_4_ps_weed(workdir,patch,parms)
 
-def run_stamps_steps(workdir:str):
+def run_stamps_steps(workdir:str,prg:int,paz:int):
     patches = read_lines(os.path.join(workdir,"patch.list"))
     parms = read_json(os.path.join(workdir,"parms.json"))
 
@@ -53,7 +52,7 @@ def run_stamps_steps(workdir:str):
     })
 
     # Run steps in parallel
-    with ThreadPool(processes=POOL_SIZE) as pool:
+    with Pool(processes=prg*paz) as pool:
         pool.map(patch_task, patch_param)
         
     step_5_ps_merge(workdir,parms)
