@@ -59,6 +59,7 @@ def calculate_threshold(D_A,D_A_max,pm,Nr_dist,select_method,max_percent_rand,lo
                 coh_thresh = np.polyval(coh_thresh_coeffs, D_A)
             else:
                 coh_thresh = np.polyval(coh_thresh_coeffs, 0.35)
+                coh_thresh = np.full(pm['coh_ps'].shape[0], coh_thresh)
                 coh_thresh_coeffs = []
         else:
             coh_thresh = np.full(pm['coh_ps'].shape[0], min_coh_filtered)

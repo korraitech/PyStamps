@@ -6,17 +6,16 @@ from .utils import read_lines, get_par, read_h5, save_h5
 from ..misc import get_module_info
 from ..logger import appLogger
 
-def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
+def step_1_ps_loadgm(workdir: str, patch: str):
     """
     Initial load of files into HDF5 format in python workspace
 
     Parameters:
         workdir (str): Path to directory containing input / output files
         patch (str): Patch identifier
-        num_threads (int): Number of threads to instruct Numba to use (default: 1).
     """
-    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {} || {}".format(
-            get_module_info(),workdir, patch, num_threads)
+    appLogger.info(">>>>>>>>>>>>>>>> {}\t\t|| {} {}".format(
+            get_module_info(),workdir, patch)
     )
 
     patch_dir = os.path.join(workdir, patch)
@@ -42,10 +41,9 @@ def step_1_ps_loadgm(workdir: str, patch: str, num_threads: int = 1):
     n_image = n_ifg
     
     # Convert dates to datetime objects
-    date_strings = np.array([ifg for ifg in ifgs], dtype='<U100')
-    years = [int(s[nb - 13 : nb - 9]) for s in date_strings]
-    months = [int(s[nb - 9 : nb - 7]) for s in date_strings]
-    days = [int(s[nb - 7: nb - 5]) for s in date_strings]
+    years = [int(ifg[nb - 13 : nb - 9]) for ifg in ifgs]
+    months = [int(ifg[nb - 9 : nb - 7]) for ifg in ifgs]
+    days = [int(ifg[nb - 7: nb - 5]) for ifg in ifgs]
 
     days = [datetime(years[i], months[i], days[i], tzinfo=timezone.utc) for i in range(len(years))]
     
