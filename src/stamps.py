@@ -58,9 +58,9 @@ class Stamps():
         appLogger.info(">>>>>>>>>>>>>>>> {}::{}".format(
             type(self).__name__, "__hdf5_to_csv"))
         ps_data = read_h5(os.path.join(self.__PARAM_OUT,"ps_plot.h5"))
-        header = ['lng','lat','point_id','coherence','Avg_Deformation_Velocity(mm/year)']
+        header = ['lng','lat','point_id','coherence','avg_deformation_velocity']
         header += [datetime.fromtimestamp(int( day * 86400)).strftime('%Y-%m-%d') for day in ps_data['day']]
-        with open(os.path.join(self.__PARAM_OUT,'urbansar_result.csv'), 'w', 
+        with open(os.path.join(self.__PARAM_OUT,'ground_displacement.csv'), 'w',
                     newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(header)

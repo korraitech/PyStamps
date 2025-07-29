@@ -1,7 +1,9 @@
-# pyStaMPS signature
-pystamps
+# pyStaMPS
+pyStaMPS - Python Stanford Method for Persistent Scatterers
 
-### How to run pystamps.
+pyStaMPS is a software package that allows to extract ground displacements from time series of synthetic aperture radar (SAR) acquisitions. The package incorporates persistent scatterer only. APS Linear is integrated as part of tropospheric correction methods in the processing workflow.
+
+### How to run pyStaMPS.
 1. Update the params in input.json
     ```
    {
@@ -22,7 +24,17 @@ pystamps
     # Now run the  command
     python3 main.py
     ```
-### How to run unit testcase.
+### Supported pyStaMPS pre-processors:
+SNAP
+
+### Installation packages.
+shaphu
+tqdm
+h5py
+scipy
+numpy
+
+### How to run sample testcase.
 1. Extract the data stored in test folder.
 2. Then update the path in input.json accordingly
 3. Finally run the python main.py
