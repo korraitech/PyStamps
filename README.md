@@ -1,12 +1,12 @@
-# pyStaMPS
-pyStaMPS - Python Stanford Method for Persistent Scatterers
+# PyStamps
+PyStamps - Python Stanford Method for Persistent Scatterers
 
-pyStaMPS is a software package that allows to extract ground displacements from time series of synthetic aperture radar (SAR) acquisitions. The package incorporates persistent scatterer only. APS Linear is integrated as part of tropospheric correction methods in the processing workflow.
+PyStamps is a software package that allows to extract ground displacements from time series of synthetic aperture radar (SAR) acquisitions. The package incorporates persistent scatterer only. APS Linear is integrated as part of tropospheric correction methods in the processing workflow.
 
 ### About KorrAI
 KorrAI is a geospatial intelligence company leveraging satellite imagery and AI to monitor land-based risks like ground deformation and flooding. Its solutions support infrastructure planning, environmental monitoring, and risk mitigation across industries.
 
-### How to run pyStaMPS.
+### How to run PyStamps.
 1. Update the params in input.json
     ```
    {
@@ -27,7 +27,7 @@ KorrAI is a geospatial intelligence company leveraging satellite imagery and AI 
     # Now run the  command
     python3 main.py
     ```
-### Supported pyStaMPS pre-processors:
+### Supported PyStamps pre-processors:
 SNAP
 
 ### Installation packages.
@@ -46,6 +46,8 @@ numpy
 ### Contributors.
 1. Rahul V Sharan : Principal enginner at KorrAI
 2. Ritwek Khosla : Senior Data Scientist at KorrAI
+3. Rajat Mann : CTO at KorrAI
 
 ### Contact us.
 Rahul V Sharan : rahul.sharan@korrai.com
+Rahul V Sharan : rahulvsharan@gmail.com
