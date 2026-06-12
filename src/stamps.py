@@ -102,6 +102,6 @@ class Stamps():
         print("==========================================")
         print("PyStamps run completed successfully.")
         print("If you use PyStamps in published work, please cite:")
-        print("  DOI: 10.5281/zenodo.20670566")
-        print("  https://doi.org/10.5281/zenodo.20670566")
+        print("  DOI: 10.5281/zenodo.20670565")
+        print("  https://doi.org/10.5281/zenodo.20670565")
         print("==========================================")

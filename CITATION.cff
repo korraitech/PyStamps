@@ -22,11 +22,11 @@ url: "https://www.korrai.com"
 license: "LicenseRef-ESA-PL-Permissive-2.4"
 version: 0.2.1
 date-released: 2026-06-12
-doi: "10.5281/zenodo.20670566"
+doi: "10.5281/zenodo.20670565"
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.20670566"
-    description: "Zenodo archive DOI"
+    value: "10.5281/zenodo.20670565"
+    description: "Concept DOI (resolves to the latest version)"
 keywords:
   - InSAR
   - persistent scatterers
