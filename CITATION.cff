@@ -1,0 +1,80 @@
+cff-version: 1.2.0
+title: "PyStamps: Python Stanford Method for Persistent Scatterers"
+message: "If you use PyStamps in your research, please cite it as below, alongside the original StaMPS publications (Hooper et al.)."
+type: software
+authors:
+  - name: "KorrAI Technologies Ltd."
+    website: "https://www.korrai.com"
+  - family-names: Sharan
+    given-names: Rahul V
+    affiliation: "KorrAI Technologies Ltd."
+  - family-names: Mann
+    given-names: Rajat
+    affiliation: "KorrAI Technologies Ltd."
+  - family-names: Khosla
+    given-names: Ritwek
+    affiliation: "KorrAI Technologies Ltd."
+  - family-names: Girohi
+    given-names: Priti
+    affiliation: "KorrAI Technologies Ltd."
+repository-code: "https://github.com/korraitech/PyStamps"
+url: "https://www.korrai.com"
+license: "LicenseRef-ESA-PL-Permissive-2.4"
+version: 0.2.0
+date-released: 2026-06-12
+keywords:
+  - InSAR
+  - persistent scatterers
+  - StaMPS
+  - ground deformation
+  - SAR interferometry
+references:
+  - type: article
+    title: "A new method for measuring deformation on volcanoes and other natural terrains using InSAR persistent scatterers"
+    authors:
+      - family-names: Hooper
+        given-names: Andrew
+        email: "A.Hooper@leeds.ac.uk"
+      - family-names: Zebker
+        given-names: Howard
+      - family-names: Segall
+        given-names: Paul
+      - family-names: Kampes
+        given-names: Bert
+    journal: "Geophysical Research Letters"
+    volume: 31
+    issue: 23
+    start: "L23611"
+    year: 2004
+    doi: "10.1029/2004GL021737"
+  - type: article
+    title: "Recent advances in SAR interferometry time series analysis for measuring crustal deformation"
+    authors:
+      - family-names: Hooper
+        given-names: Andrew
+        email: "A.Hooper@leeds.ac.uk"
+      - family-names: Bekaert
+        given-names: David
+      - family-names: Spaans
+        given-names: Karsten
+      - family-names: Arikan
+        given-names: Mahmut
+    journal: "Tectonophysics"
+    volume: "514-517"
+    start: 1
+    end: 13
+    year: 2012
+    doi: "10.1016/j.tecto.2011.10.013"
+  - type: software
+    title: "StaMPS — Stanford Method for Persistent Scatterers"
+    authors:
+      - family-names: Hooper
+        given-names: Andrew
+        email: "A.Hooper@leeds.ac.uk"
+      - family-names: Bekaert
+        given-names: David
+      - family-names: Spaans
+        given-names: Karsten
+      - family-names: Arikan
+        given-names: Mahmut
+    repository-code: "https://github.com/dbekaert/StaMPS/tree/master"
