@@ -41,7 +41,7 @@ of the tropospheric correction methods in the processing workflow.
 ## Overview
 
 PyStamps processes a stack of co-registered SAR acquisitions and identifies persistent
-scatterers — stable, point-like targets that maintain coherent radar reflectivity over time.
+scatterers stable, point-like targets that maintain coherent radar reflectivity over time.
 By tracking the interferometric phase of these scatterers, PyStamps derives line-of-sight
 ground deformation time series suitable for monitoring subsidence, landslides, infrastructure
 stability, and other land-based risks.
