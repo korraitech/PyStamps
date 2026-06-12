@@ -1,0 +1,50 @@
+{
+  "title": "PyStamps: Python Stanford Method for Persistent Scatterers",
+  "upload_type": "software",
+  "description": "PyStamps is an open-source Python implementation of the Stanford Method for Persistent Scatterers (StaMPS) for extracting ground displacement time series from stacks of Synthetic Aperture Radar (SAR) acquisitions using the Persistent Scatterer technique. It works with SNAP-preprocessed input and includes linear APS (tropospheric) correction.",
+  "creators": [
+    {
+      "name": "KorrAI Technologies Ltd."
+    },
+    {
+      "name": "Sharan, Rahul V",
+      "affiliation": "KorrAI Technologies Ltd."
+    },
+    {
+      "name": "Mann, Rajat",
+      "affiliation": "KorrAI Technologies Ltd."
+    },
+    {
+      "name": "Khosla, Ritwek",
+      "affiliation": "KorrAI Technologies Ltd."
+    },
+    {
+      "name": "Girohi, Priti",
+      "affiliation": "KorrAI Technologies Ltd."
+    }
+  ],
+  "keywords": [
+    "InSAR",
+    "persistent scatterers",
+    "StaMPS",
+    "ground deformation",
+    "SAR interferometry"
+  ],
+  "related_identifiers": [
+    {
+      "relation": "isSupplementTo",
+      "identifier": "https://github.com/korraitech/PyStamps",
+      "resource_type": "software"
+    },
+    {
+      "relation": "isDerivedFrom",
+      "identifier": "10.1029/2004GL021737",
+      "resource_type": "publication-article"
+    },
+    {
+      "relation": "isDerivedFrom",
+      "identifier": "10.1016/j.tecto.2011.10.013",
+      "resource_type": "publication-article"
+    }
+  ]
+}
