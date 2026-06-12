@@ -55,7 +55,7 @@ correlated look-angle (SCLA) error correction, and export of the final displacem
 ## About KorrAI
 
 KorrAI builds Traceable AI for billion-dollar builds. Engineers, insurers, and asset owners
-make billion-dollar decisions with fragmented ground data — KorrAI closes that gap. Our
+make billion-dollar decisions with fragmented ground data, KorrAI closes that gap. Our
 platform, **TRAIL**, unifies satellite InSAR, geotechnical studies, multi-hazard data, and
 engineering documents into traceable, citation-backed desktop risk studies. Today KorrAI
 monitors 5+ million sq. km and over $100B in critical assets across mining, energy, insurance,
