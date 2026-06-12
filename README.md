@@ -2,6 +2,7 @@
 
 **PyStamps — Python Stanford Method for Persistent Scatterers**
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20670566.svg)](https://doi.org/10.5281/zenodo.20670566)
 ![License: ESA-PL Permissive v2.4](https://img.shields.io/badge/License-ESA--PL%20Permissive%20v2.4-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.x-blue.svg)
 ![Method: StaMPS](https://img.shields.io/badge/method-StaMPS-orange.svg)
@@ -142,17 +143,18 @@ output directory (`Pout`).
 ### Citing PyStamps
 
 > KorrAI Technologies Ltd., Sharan, R. V., Mann, R., Khosla, R., & Girohi, P. (2026).
-> *PyStamps: Python Stanford Method for Persistent Scatterers* (v0.2.0) [Computer software].
-> https://github.com/korraitech/PyStamps
+> *PyStamps: Python Stanford Method for Persistent Scatterers* (v0.2.1) [Computer software].
+> Zenodo. https://doi.org/10.5281/zenodo.20670566
 
 ```bibtex
 @software{pystamps2026,
   author       = {{KorrAI Technologies Ltd.} and Sharan, Rahul V and Mann, Rajat and Khosla, Ritwek and Girohi, Priti},
   title        = {PyStamps: Python Stanford Method for Persistent Scatterers},
-  version      = {0.2.0},
+  version      = {0.2.1},
   year         = {2026},
-  publisher    = {KorrAI Technologies Ltd.},
-  url          = {https://github.com/korraitech/PyStamps}
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.20670566},
+  url          = {https://doi.org/10.5281/zenodo.20670566}
 }
 ```
 

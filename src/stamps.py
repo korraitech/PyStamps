@@ -101,6 +101,7 @@ class Stamps():
     def __print_citation_notice() -> None:
         print("==========================================")
         print("PyStamps run completed successfully.")
-        print("If you use PyStamps in published work, please cite it.")
-        print("How to cite: https://github.com/korraitech/PyStamps#how-to-cite")
+        print("If you use PyStamps in published work, please cite:")
+        print("  DOI: 10.5281/zenodo.20670566")
+        print("  https://doi.org/10.5281/zenodo.20670566")
         print("==========================================")
