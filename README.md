@@ -12,7 +12,6 @@ It is a Python implementation of the Stanford Method for Persistent Scatterers
 ([StaMPS](https://github.com/dbekaert/StaMPS/tree/master)). APS Linear is integrated as part
 of the tropospheric correction methods in the processing workflow.
 
----
 
 ## Table of Contents
 
@@ -36,7 +35,6 @@ of the tropospheric correction methods in the processing workflow.
   - [License](#license)
   - [Contact](#contact)
 
----
 
 ## Overview
 
@@ -50,7 +48,6 @@ The processing workflow includes candidate selection, phase estimation and weedi
 merging, 3-D phase unwrapping, linear atmospheric phase screen (APS) correction, spatially
 correlated look-angle (SCLA) error correction, and export of the final displacement product.
 
----
 
 ## About KorrAI
 
@@ -63,7 +60,6 @@ and infrastructure. Ground deformation is one of TRAIL's core evidence layers, a
 the open-source engine we built to measure it at scale. Learn more at
 [korrai.com](https://www.korrai.com).
 
----
 
 ## Requirements
 
@@ -74,7 +70,6 @@ the open-source engine we built to measure it at scale. Learn more at
 - [`tqdm`](https://tqdm.github.io/)
 - [`snaphu`](https://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu/) (phase unwrapping)
 
----
 
 ## Installation
 
@@ -86,7 +81,6 @@ cd PyStamps
 pip install -r requirements.txt
 ```
 
----
 
 ## Usage
 
@@ -129,7 +123,6 @@ python3 main.py
 The final ground displacement product is written as `ground_displacement.csv` in the
 output directory (`Pout`).
 
----
 
 ## Sample Test Case
 
@@ -138,13 +131,11 @@ output directory (`Pout`).
 3. Run `python3 main.py`.
 4. The output CSV is generated in the `Pout` folder.
 
----
 
 ## Supported Pre-processors
 
 - **SNAP** (ESA Sentinel Application Platform)
 
----
 
 ## How to Cite
 
@@ -222,7 +213,6 @@ PyStamps uses **SNAP** for pre-processing.
 }
 ```
 
----
 
 ## Acknowledgements
 
@@ -231,7 +221,6 @@ developed by **Prof. Andrew Hooper** (`A.Hooper@leeds.ac.uk`, University of Leed
 collaborators. We gratefully acknowledge their foundational work and the open-source StaMPS
 project: https://github.com/dbekaert/StaMPS
 
----
 
 ## Contributors
 
@@ -242,7 +231,6 @@ project: https://github.com/dbekaert/StaMPS
 | Rajat Mann | CTO, KorrAI |
 | Priti Girohi | Senior Data Scientist, KorrAI |
 
----
 
 ## License
 
@@ -250,7 +238,6 @@ PyStamps is released under the **European Space Agency Public License (ESA-PL) P
 (Type 3) – v2.4**. See the [LICENSE](LICENSE) file for the full text and
 [https://essr.esa.int/license/european-space-agency-public-license-v2-4-permissive-type-3](https://essr.esa.int/license/european-space-agency-public-license-v2-4-permissive-type-3).
 
----
 
 ## Contact
 
