@@ -5,6 +5,19 @@ All notable changes to PyStamps are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-06-15
+
+### Added
+- Validation section in the README documenting the StaMPS vs PyStamps benchmark
+  (Houston AOIs: accuracy and CPU-efficiency results) and a step-by-step guide to
+  reproduce the comparison.
+
+### Changed
+- Clarified that `snaphu` is an external command-line binary (not a pip package) in the
+  Requirements and Installation sections.
+- Fixed minor README wording, aligned the contributor order with the citation, and tidied
+  the table of contents.
+
 ## [0.2.1] - 2026-06-12
 
 ### Added
@@ -37,5 +50,6 @@ First public release of PyStamps.
 ### Changed
 - Licensed under the European Space Agency Public License (ESA-PL) Permissive (Type 3) – v2.4.
 
+[0.2.2]: https://github.com/korraitech/PyStamps/releases/tag/v0.2.2
 [0.2.1]: https://github.com/korraitech/PyStamps/releases/tag/v0.2.1
 [0.2.0]: https://github.com/korraitech/PyStamps/releases/tag/v0.2.0

@@ -16,31 +16,31 @@ of the tropospheric correction methods in the processing workflow.
 
 ## Table of Contents
 
-- [PyStamps](#pystamps)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [About KorrAI](#about-korrai)
-  - [Requirements](#requirements)
-  - [Installation](#installation)
-  - [Usage](#usage)
-    - [Configuration](#configuration)
-    - [Running PyStamps](#running-pystamps)
-  - [Sample Test Case](#sample-test-case)
-  - [Supported Pre-processors](#supported-pre-processors)
-  - [How to Cite](#how-to-cite)
-    - [Citing PyStamps](#citing-pystamps)
-    - [Citing the Original StaMPS Method](#citing-the-original-stamps-method)
-    - [Citing the Pre-processor (SNAP)](#citing-the-pre-processor-snap)
-  - [Acknowledgements](#acknowledgements)
-  - [Contributors](#contributors)
-  - [License](#license)
-  - [Contact](#contact)
+- [Overview](#overview)
+- [About KorrAI](#about-korrai)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Configuration](#configuration)
+  - [Running PyStamps](#running-pystamps)
+- [Sample Test Case](#sample-test-case)
+- [Supported Pre-processors](#supported-pre-processors)
+- [Validation](#validation)
+  - [Reproducing the Benchmark](#reproducing-the-benchmark)
+- [How to Cite](#how-to-cite)
+  - [Citing PyStamps](#citing-pystamps)
+  - [Citing the Original StaMPS Method](#citing-the-original-stamps-method)
+  - [Citing the Pre-processor (SNAP)](#citing-the-pre-processor-snap)
+- [Acknowledgements](#acknowledgements)
+- [Contributors](#contributors)
+- [License](#license)
+- [Contact](#contact)
 
 
 ## Overview
 
 PyStamps processes a stack of co-registered SAR acquisitions and identifies persistent
-scatterers stable, point-like targets that maintain coherent radar reflectivity over time.
+scatterers — stable, point-like targets that maintain coherent radar reflectivity over time.
 By tracking the interferometric phase of these scatterers, PyStamps derives line-of-sight
 ground deformation time series suitable for monitoring subsidence, landslides, infrastructure
 stability, and other land-based risks.
@@ -53,7 +53,7 @@ correlated look-angle (SCLA) error correction, and export of the final displacem
 ## About KorrAI
 
 KorrAI builds Traceable AI for billion-dollar builds. Engineers, insurers, and asset owners
-make billion-dollar decisions with fragmented ground data, KorrAI closes that gap. Our
+make billion-dollar decisions with fragmented ground data — KorrAI closes that gap. Our
 platform, **TRAIL**, unifies satellite InSAR, geotechnical studies, multi-hazard data, and
 engineering documents into traceable, citation-backed desktop risk studies. Today KorrAI
 monitors 5+ million sq. km and over $100B in critical assets across mining, energy, insurance,
@@ -65,11 +65,11 @@ the open-source engine we built to measure it at scale. Learn more at
 ## Requirements
 
 - Python 3.x
-- [`numpy`](https://numpy.org/)
-- [`scipy`](https://scipy.org/)
-- [`h5py`](https://www.h5py.org/)
-- [`tqdm`](https://tqdm.github.io/)
-- [`snaphu`](https://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu/) (phase unwrapping)
+- Python packages (installed via `requirements.txt`): [`numpy`](https://numpy.org/),
+  [`scipy`](https://scipy.org/), [`h5py`](https://www.h5py.org/), [`tqdm`](https://tqdm.github.io/)
+- [`snaphu`](https://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu/) — external
+  command-line tool used for phase unwrapping. It is **not** a Python package and must be
+  installed separately and available on your `PATH`.
 
 
 ## Installation
@@ -81,6 +81,19 @@ git clone https://github.com/korraitech/PyStamps.git
 cd PyStamps
 pip install -r requirements.txt
 ```
+
+Install `snaphu` separately (it is a standalone binary, not installed by `pip`). On most
+systems it is available through a package manager, for example:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install snaphu
+
+# macOS (Homebrew)
+brew install snaphu
+```
+
+Verify it is on your `PATH` with `snaphu --help`.
 
 
 ## Usage
@@ -138,19 +151,106 @@ output directory (`Pout`).
 - **SNAP** (ESA Sentinel Application Platform)
 
 
+## Validation
+
+PyStamps is benchmarked against the reference MATLAB **StaMPS** implementation on identical
+SNAP-preprocessed Sentinel-1 inputs, preserving algorithmic fidelity while removing the
+MATLAB licensing requirement.
+
+**Benchmark study.** Houston, USA — a descending Sentinel-1 IW stack of 61 scenes
+(2023-06-01 to 2025-06-01, master 2024-06-01), processed over two areas of interest (AOIs):
+a compact ~3,200 km² AOI and an extensive ~8,000 km² AOI.
+
+**Accuracy.** PyStamps produces statistically equivalent PSI results to StaMPS. For the
+small AOI:
+
+| Metric (small AOI, ~3,200 km²) | StaMPS | PyStamps | Difference |
+|--------------------------------|--------|----------|------------|
+| Persistent scatterers | 2,233,039 | 2,233,428 | +0.02% |
+| Common points (overlap) | — | 2,232,960 | >99.99% |
+| Mean velocity (mm/yr) | 0.00 | 0.00 | 0.00 |
+| Std. dev. velocity (mm/yr) | 2.56 | 2.53 | −1.10% |
+| Avg. PS coherence | 0.86 | 0.86 | 0.00 |
+
+The large AOI (~8,000 km²) shows the same agreement: 3,488,896 vs 3,489,338 persistent
+scatterers (+0.01%), mean velocity 0.00 mm/yr for both, and identical average coherence
+(0.87). Velocity distributions match across percentiles (small-AOI 2nd / 50th / 98th of
+−5.93 / 0.28 / 4.60 mm/yr for StaMPS vs −5.77 / 0.27 / 4.59 mm/yr for PyStamps), with
+sub-millimetre agreement in PS-point velocities.
+
+**Efficiency.** On identical hardware, PyStamps reduced average CPU usage by ~64.6% relative
+to StaMPS, supporting more scalable, cloud-friendly deployment.
+
+**Broader QA/QC coverage.** Beyond the Houston benchmark, PyStamps has been cross-checked
+against StaMPS across 15 jobs spanning five scene categories — all passing:
+
+| Scene category | Representative sites |
+|----------------|----------------------|
+| Tunnel | South Korea tunnel |
+| Urban | Houston, Toronto / GTA, Pennsylvania |
+| Mine | Stantec, Scotia, Cadia–Newcrest |
+| Desert + urban | Texas, Las Vegas, California |
+| Coastal | San Francisco, Hernando (Florida) |
+
+> These figures are a high-level summary. For the full validation analysis — per-site
+> metrics, velocity histograms, displacement-map comparisons, and resource profiling —
+> please reach out to KorrAI at rahul.sharan@korrai.com.
+
+### Reproducing the Benchmark
+
+The validation is a like-for-like comparison: PyStamps and the reference MATLAB StaMPS are
+run on the **same** SNAP-preprocessed stack, and their outputs are compared. To reproduce it:
+
+1. **Prepare the input stack.** Pre-process a Sentinel-1 IW stack in SNAP and export it into
+   the RSLC directory structure PyStamps expects (`rslc/`, `diff0/`, `geo/`, `dem/`). Use a
+   single master scene near the temporal centre of the stack.
+
+2. **Configure `input.json`.** Use the same parameters for both engines. The Houston small-AOI
+   benchmark uses a 61-scene stack (2023-06-01 to 2025-06-01), master `20240601`, two range and
+   azimuth patches, and an amplitude-dispersion threshold of 0.4:
+
+   ```json
+   {
+       "Pstm": { "ADT": 0.4, "NRP": 2, "NAP": 2, "RPO": 50, "APO": 200 },
+       "Prdt": "20240601",
+       "Pinp": "<snap_export_dir>",
+       "Pout": "<pystamps_output_dir>"
+   }
+   ```
+
+3. **Run PyStamps.** `python3 main.py` produces `ground_displacement.csv` (lon, lat, point id,
+   coherence, average LOS velocity, and the per-date displacement series).
+
+4. **Run reference StaMPS.** Process the identical SNAP stack through MATLAB StaMPS to obtain
+   the reference PS velocities and coherence.
+
+5. **Compare the outputs** on these key metrics:
+   - **PS count** and **spatial overlap** (fraction of co-located points between the two runs);
+   - **average deformation velocity** distribution — mean, standard deviation, min/max, and the
+     2nd / 50th / 98th percentiles;
+   - **average PS coherence**;
+   - **per-point LOS velocity and time series** for selected scatterers;
+   - **velocity histograms** and **deformation-velocity maps** for a qualitative check.
+
+Equivalence is expected when the velocity distributions align (mean velocity near 0 mm/yr,
+matching percentiles), PS overlap exceeds ~99.9%, and per-point velocities agree to
+sub-millimetre level. Small point-level differences are normal and stem from platform-dependent
+floating-point arithmetic between MATLAB and NumPy.
+
+
 ## How to Cite
 
 ### Citing PyStamps
 
 > KorrAI Technologies Ltd., Sharan, R. V., Mann, R., Khosla, R., & Girohi, P. (2026).
-> *PyStamps: Python Stanford Method for Persistent Scatterers* (v0.2.1) [Computer software].
+> *PyStamps: Python Stanford Method for Persistent Scatterers* (v0.2.2) [Computer software].
 > Zenodo. https://doi.org/10.5281/zenodo.20670565
 
 ```bibtex
 @software{pystamps2026,
   author       = {{KorrAI Technologies Ltd.} and Sharan, Rahul V and Mann, Rajat and Khosla, Ritwek and Girohi, Priti},
   title        = {PyStamps: Python Stanford Method for Persistent Scatterers},
-  version      = {0.2.1},
+  version      = {0.2.2},
   year         = {2026},
   publisher    = {Zenodo},
   doi          = {10.5281/zenodo.20670565},
@@ -221,7 +321,7 @@ PyStamps uses **SNAP** for pre-processing.
 PyStamps is built upon the Stanford Method for Persistent Scatterers (StaMPS), originally
 developed by **Prof. Andrew Hooper** (`A.Hooper@leeds.ac.uk`, University of Leeds) and
 collaborators. We gratefully acknowledge their foundational work and the open-source StaMPS
-project: https://github.com/dbekaert/StaMPS
+project: https://github.com/dbekaert/StaMPS/tree/master
 
 
 ## Contributors
@@ -229,8 +329,8 @@ project: https://github.com/dbekaert/StaMPS
 | Name | Role |
 |------|------|
 | Rahul V Sharan | Principal Engineer, KorrAI |
-| Ritwek Khosla | Senior Data Scientist, KorrAI |
 | Rajat Mann | CTO, KorrAI |
+| Ritwek Khosla | Senior Data Scientist, KorrAI |
 | Priti Girohi | Senior Data Scientist, KorrAI |
 
 

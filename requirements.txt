@@ -1,4 +1,3 @@
-# shaphu
 tqdm
 h5py
 scipy
